@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import mimetypes
 import uuid
+from collections.abc import ItemsView, KeysView, ValuesView
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Optional, Sequence, Union
 
@@ -13,19 +14,177 @@ from .types import JSON, AdvancedFilter, ConversationTurn, Filters, Metric, Vect
 PathLike = Union[str, Path]
 
 
+class Dataset:
+    """Dataset resource object returned by create/get/list calls.
+
+    The object keeps the raw API payload while exposing instance methods that
+    delegate to the existing service-style clients. It also implements the
+    common mapping helpers so existing ``dataset["id"]`` style code keeps
+    working.
+    """
+
+    def __init__(self, service: "DatasetsResource", raw_data: Mapping[str, Any]) -> None:
+        self.service = service
+        self.client = service.client
+        self.raw_data: JSON = dict(raw_data)
+        self.id = self._extract_id(self.raw_data)
+
+    def search(
+        self,
+        *,
+        vector: Optional[Sequence[float]] = None,
+        text: Optional[str] = None,
+        top_k: int = 10,
+        filters: Optional[Filters] = None,
+        advanced_filters: Optional[Sequence[AdvancedFilter]] = None,
+        embedding_provider: Optional[str] = None,
+        embedding_model: Optional[str] = None,
+        nprobe_override: Optional[int] = None,
+        rerank_depth_override: Optional[int] = None,
+        hybrid: Optional[bool] = None,
+        sparse_query: Optional[str] = None,
+        alpha: Optional[float] = None,
+        include_embeddings: Optional[bool] = None,
+        include_documents: Optional[bool] = None,
+        include_metadata: Optional[bool] = None,
+    ) -> JSON:
+        return self.service.search(
+            self.id,
+            vector=vector,
+            text=text,
+            top_k=top_k,
+            filters=filters,
+            advanced_filters=advanced_filters,
+            embedding_provider=embedding_provider,
+            embedding_model=embedding_model,
+            nprobe_override=nprobe_override,
+            rerank_depth_override=rerank_depth_override,
+            hybrid=hybrid,
+            sparse_query=sparse_query,
+            alpha=alpha,
+            include_embeddings=include_embeddings,
+            include_documents=include_documents,
+            include_metadata=include_metadata,
+        )
+
+    def insert(self, vectors: Sequence[Vector]) -> JSON:
+        return self.service.insert_vectors(self.id, vectors)
+
+    def insert_vectors(self, vectors: Sequence[Vector]) -> JSON:
+        return self.service.insert_vectors(self.id, vectors)
+
+    def add_texts(
+        self,
+        texts: Sequence[str],
+        *,
+        ids: Optional[Sequence[str]] = None,
+        metadatas: Optional[Sequence[Mapping[str, Any]]] = None,
+    ) -> JSON:
+        return self.service.add_texts(self.id, texts, ids=ids, metadatas=metadatas)
+
+    def delete(self) -> Any:
+        return self.service.delete(self.id)
+
+    def ask(
+        self,
+        query: str,
+        *,
+        top_k: int = 5,
+        conversation_history: Optional[Sequence[ConversationTurn]] = None,
+        include_sources: bool = True,
+    ) -> JSON:
+        if self.client is None:
+            raise TypeError("Dataset.ask requires a Dataset created by a VectorAmp client.")
+        return self.client.intelligence.query(
+            query,
+            dataset_id=self.id,
+            top_k=top_k,
+            conversation_history=conversation_history,
+            include_sources=include_sources,
+        )
+
+    def ingest_files(
+        self,
+        paths: Sequence[PathLike],
+        *,
+        source_name: str = "vectoramp-python-upload",
+        description: Optional[str] = None,
+    ) -> JSON:
+        if self.client is None:
+            raise TypeError(
+                "Dataset.ingest_files requires a Dataset created by a VectorAmp client."
+            )
+        return self.client.ingestion.ingest_files(
+            dataset_id=self.id,
+            paths=paths,
+            source_name=source_name,
+            description=description,
+        )
+
+    def ingest_source(self, source_id: str, *, pipeline_id: Optional[str] = None) -> JSON:
+        if self.client is None:
+            raise TypeError(
+                "Dataset.ingest_source requires a Dataset created by a VectorAmp client."
+            )
+        return self.client.ingestion.start_job(
+            source_id=source_id,
+            dataset_id=self.id,
+            pipeline_id=pipeline_id,
+        )
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self.raw_data.get(key, default)
+
+    def keys(self) -> KeysView[str]:
+        return self.raw_data.keys()
+
+    def values(self) -> ValuesView[Any]:
+        return self.raw_data.values()
+
+    def items(self) -> ItemsView[str, Any]:
+        return self.raw_data.items()
+
+    def __getitem__(self, key: str) -> Any:
+        return self.raw_data[key]
+
+    def __contains__(self, key: object) -> bool:
+        return key in self.raw_data
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.raw_data)
+
+    def __len__(self) -> int:
+        return len(self.raw_data)
+
+    def __repr__(self) -> str:
+        return f"Dataset(id={self.id!r})"
+
+    @staticmethod
+    def _extract_id(raw_data: Mapping[str, Any]) -> str:
+        value = raw_data.get("id") or raw_data.get("dataset_id")
+        if value is None:
+            raise ValueError("Dataset response did not include id or dataset_id.")
+        return str(value)
+
+
 class DatasetsResource:
     """Dataset management, search, and vector insertion APIs."""
 
-    def __init__(self, transport: BaseTransport) -> None:
+    def __init__(self, transport: BaseTransport, *, client: Optional[Any] = None) -> None:
         self._transport = transport
+        self.client = client
 
     def list(self, *, limit: int = 50, offset: int = 0) -> JSON:
-        return self._transport.request(
+        page = self._transport.request(
             "GET", "/datasets", params={"limit": limit, "offset": offset}
         )
+        datasets = page.get("datasets")
+        if isinstance(datasets, list):
+            page["datasets"] = [self._to_dataset(dataset) for dataset in datasets]
+        return page
 
-    def get(self, dataset_id: str) -> JSON:
-        return self._transport.request("GET", f"/datasets/{dataset_id}")
+    def get(self, dataset_id: str) -> Dataset:
+        return self._to_dataset(self._transport.request("GET", f"/datasets/{dataset_id}"))
 
     def create(
         self,
@@ -38,7 +197,7 @@ class DatasetsResource:
         filters: Optional[Mapping[str, Any]] = None,
         metadata_schema: Optional[Mapping[str, Any]] = None,
         tuning: Optional[Mapping[str, Any]] = None,
-    ) -> JSON:
+    ) -> Dataset:
         """Create a SABLE dataset.
 
         `index_type` is intentionally not exposed; the SDK always requests SABLE.
@@ -56,7 +215,7 @@ class DatasetsResource:
             body["metadata_schema"] = dict(metadata_schema)
         if tuning is not None:
             body["tuning"] = dict(tuning)
-        return self._transport.request("POST", "/datasets", json_body=body)
+        return self._to_dataset(self._transport.request("POST", "/datasets", json_body=body))
 
     def delete(self, dataset_id: str) -> Any:
         return self._transport.request("DELETE", f"/datasets/{dataset_id}")
@@ -113,6 +272,9 @@ class DatasetsResource:
             "POST", f"/datasets/{dataset_id}/insert", json_body={"vectors": list(vectors)}
         )
 
+    def insert(self, dataset_id: str, vectors: Sequence[Vector]) -> JSON:
+        return self.insert_vectors(dataset_id, vectors)
+
     def embed(
         self,
         dataset_id: str,
@@ -156,6 +318,9 @@ class DatasetsResource:
 
     def ensure_engine(self, dataset_id: str) -> JSON:
         return self._transport.request("POST", f"/datasets/{dataset_id}/ensure-engine")
+
+    def _to_dataset(self, raw_data: Mapping[str, Any]) -> Dataset:
+        return Dataset(self, raw_data)
 
 
 class IngestionResource:

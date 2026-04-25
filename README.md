@@ -58,16 +58,27 @@ dataset = client.datasets.create(
     embedding_model="Qwen/Qwen3-Embedding-4B",
 )
 
-dataset_id = dataset["id"]
+dataset_id = dataset.id  # also available as dataset["id"] for compatibility
 ```
 
-List methods return the API pagination envelope:
+Create/get/list return `Dataset` resource objects. They keep the raw API payload and
+carry the client/services needed for instance methods:
+
+```python
+dataset = client.datasets.get(dataset_id)
+print(dataset.id, dataset.raw_data)
+```
+
+List methods return the API pagination envelope with `Dataset` objects in the `datasets` field:
 
 ```python
 page = client.datasets.list(limit=50, offset=0)
-print(page["datasets"], page["total"], page["limit"], page["offset"])
+for dataset in page["datasets"]:
+    print(dataset.id, dataset.raw_data)
+print(page["total"], page["limit"], page["offset"])
 ```
 
+Service-style methods are still available for callers that prefer passing `dataset_id` explicitly.
 Get or delete a dataset:
 
 ```python
@@ -80,8 +91,7 @@ client.datasets.delete(dataset_id)
 Insert raw vectors:
 
 ```python
-client.datasets.insert_vectors(
-    dataset_id,
+dataset.insert(
     [
         {
             "id": "doc-001",
@@ -95,8 +105,7 @@ client.datasets.insert_vectors(
 Embed text with the dataset's configured model and insert the resulting vectors:
 
 ```python
-client.datasets.add_texts(
-    dataset_id,
+dataset.add_texts(
     ["VectorAmp uses SABLE for high-performance vector search."],
     ids=["sable-note"],
     metadatas=[{"source": "readme"}],
@@ -108,8 +117,7 @@ client.datasets.add_texts(
 Search by text:
 
 ```python
-results = client.datasets.search(
-    dataset_id,
+results = dataset.search(
     text="How does SABLE work?",
     top_k=10,
     include_documents=True,
@@ -119,14 +127,13 @@ results = client.datasets.search(
 Search by vector:
 
 ```python
-results = client.datasets.search(dataset_id, vector=[0.1, 0.2, 0.3], top_k=5)
+results = dataset.search(vector=[0.1, 0.2, 0.3], top_k=5)
 ```
 
 Hybrid and filtered search:
 
 ```python
-results = client.datasets.search(
-    dataset_id,
+results = dataset.search(
     text="wireless headphones",
     top_k=10,
     filters={"category": "electronics"},
@@ -142,7 +149,7 @@ results = client.datasets.search(
 Start ingestion from an existing source:
 
 ```python
-job = client.ingestion.start_job(source_id="source-uuid", dataset_id=dataset_id)
+job = dataset.ingest_source("source-uuid")
 ```
 
 List jobs with pagination:
@@ -164,8 +171,7 @@ source = client.ingestion.create_source(
 Upload local files through the REST upload flow. The SDK creates a `file_upload` source, initializes presigned uploads, uploads bytes to the returned URLs, and completes the upload job:
 
 ```python
-job = client.ingestion.ingest_files(
-    dataset_id=dataset_id,
+job = dataset.ingest_files(
     paths=["./docs/whitepaper.pdf", "./docs/overview.txt"],
     source_name="product-docs-upload",
 )
@@ -176,11 +182,7 @@ job = client.ingestion.ingest_files(
 Non-streaming query:
 
 ```python
-answer = client.ask(
-    "What are the key product features?",
-    dataset_id=dataset_id,  # or "all"
-    top_k=5,
-)
+answer = dataset.ask("What are the key product features?", top_k=5)
 print(answer["answer"])
 ```
 

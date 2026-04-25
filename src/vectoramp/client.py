@@ -32,7 +32,7 @@ class VectorAmp:
             timeout=timeout,
             client=http_client,
         )
-        self.datasets = DatasetsResource(self.transport)
+        self.datasets = DatasetsResource(self.transport, client=self)
         self.ingestion = IngestionResource(self.transport)
         self.intelligence = IntelligenceResource(self.transport)
 
