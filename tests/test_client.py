@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 import pytest
 
-from vectoramp import APIError, AuthenticationError, VectorAmp
+from vectoramp import APIError, AuthenticationError, Dataset, VectorAmp
 
 
 def make_client(handler):
@@ -34,7 +34,13 @@ def test_dataset_create_forces_sable_and_auth_header() -> None:
         return json_response({"id": "ds_1", "index_type": "sable"}, 201)
 
     client = make_client(handler)
-    result = client.datasets.create(name="docs", dim=2560)
+    result = client.datasets.create(
+        name="docs",
+        dim=2560,
+        filters={"category": "string"},
+        metadata_schema={"title": {"type": "string"}},
+        tuning={"replicas": 1},
+    )
 
     assert result["id"] == "ds_1"
     assert seen["url"] == "https://api.test/datasets"
@@ -44,6 +50,9 @@ def test_dataset_create_forces_sable_and_auth_header() -> None:
         "provider": "vectoramp",
         "model": "Qwen/Qwen3-Embedding-4B",
     }
+    assert seen["body"]["filters"] == {"category": "string"}
+    assert seen["body"]["metadata_schema"] == {"title": {"type": "string"}}
+    assert seen["body"]["tuning"] == {"replicas": 1}
 
 
 def test_list_get_delete_and_stats() -> None:
@@ -52,7 +61,9 @@ def test_list_get_delete_and_stats() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append((request.method, request.url.path, dict(request.url.params)))
         if request.method == "GET" and request.url.path == "/datasets":
-            return json_response({"datasets": [], "total": 0, "limit": 25, "offset": 5})
+            return json_response(
+                {"datasets": [{"id": "ds_1", "name": "docs"}], "total": 1, "limit": 25, "offset": 5}
+            )
         if request.method == "GET" and request.url.path == "/datasets/ds_1/stats":
             return json_response({"vector_count": 2})
         if request.method == "GET":
@@ -60,7 +71,18 @@ def test_list_get_delete_and_stats() -> None:
         return httpx.Response(204)
 
     client = make_client(handler)
-    assert client.datasets.list(limit=25, offset=5)["limit"] == 25
+    page = client.datasets.list(limit=25, offset=5)
+    assert page["limit"] == 25
+    assert isinstance(page["datasets"][0], Dataset)
+    assert page["datasets"][0].id == "ds_1"
+    assert page["datasets"][0].get("name") == "docs"
+    assert list(page["datasets"][0].keys()) == ["id", "name"]
+    assert list(page["datasets"][0].values()) == ["ds_1", "docs"]
+    assert list(page["datasets"][0].items()) == [("id", "ds_1"), ("name", "docs")]
+    assert "name" in page["datasets"][0]
+    assert list(iter(page["datasets"][0])) == ["id", "name"]
+    assert len(page["datasets"][0]) == 2
+    assert repr(page["datasets"][0]) == "Dataset(id='ds_1')"
     assert client.datasets.get("ds_1")["id"] == "ds_1"
     assert client.datasets.stats("ds_1")["vector_count"] == 2
     assert client.datasets.delete("ds_1") is None
@@ -106,6 +128,73 @@ def test_search_text_payload() -> None:
     }
 
 
+def test_dataset_resource_instance_methods_delegate_to_services(tmp_path: Path) -> None:
+    sample = tmp_path / "sample.txt"
+    sample.write_text("hello")
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "upload.test":
+            return httpx.Response(200)
+        body = json.loads(request.content) if request.content else None
+        calls.append((request.method, request.url.path, body))
+        if request.url.path == "/datasets/ds_1/search":
+            return json_response({"results": []})
+        if request.url.path == "/datasets/ds_1/insert":
+            return json_response({"inserted": 1})
+        if request.url.path == "/datasets/ds_1/embed":
+            return json_response({"embeddings": [[0.1, 0.2]]})
+        if request.url.path == "/intelligence/query":
+            return json_response({"answer": "yes"})
+        if request.url.path == "/ingestion/jobs":
+            return json_response({"job_id": "job_1"})
+        if request.url.path == "/v1/sources":
+            return json_response({"id": "source_2"})
+        if request.url.path == "/v1/sources/source_2/upload/init":
+            return json_response(
+                {
+                    "job_id": "job_2",
+                    "uploads": [
+                        {
+                            "file_id": "file_1",
+                            "file_name": "sample.txt",
+                            "upload_url": "https://upload.test/file_1",
+                        }
+                    ],
+                }
+            )
+        if request.url.path == "/v1/sources/source_2/upload/complete":
+            return json_response({"job_id": "job_2", "status": "pending"})
+        if request.method == "DELETE" and request.url.path == "/datasets/ds_1":
+            return httpx.Response(204)
+        raise AssertionError(str(request.url))
+
+    client = make_client(handler)
+    dataset = Dataset(client.datasets, {"id": "ds_1", "name": "docs"})
+
+    assert dataset.raw_data["name"] == "docs"
+    assert dataset.client is client
+    assert dataset.search(text="hello", top_k=2) == {"results": []}
+    assert dataset.insert([{"id": "v1", "values": [0.1], "metadata": {}}]) == {"inserted": 1}
+    assert dataset.insert_vectors(
+        [{"id": "v2", "values": [0.2], "metadata": {}}]
+    ) == {"inserted": 1}
+    assert dataset.add_texts(["hello"], ids=["text_1"])["inserted"] == 1
+    assert dataset.ask("question?")["answer"] == "yes"
+    assert dataset.ingest_source("source_1", pipeline_id="pipe_1")["job_id"] == "job_1"
+    assert dataset.ingest_files([sample], source_name="upload")["status"] == "pending"
+    assert dataset.delete() is None
+
+    assert ("POST", "/datasets/ds_1/search", {"top_k": 2, "query_text": "hello"}) in calls
+    assert ("POST", "/intelligence/query", {
+        "query": "question?",
+        "top_k": 5,
+        "stream": False,
+        "include_sources": True,
+        "dataset_id": "ds_1",
+    }) in calls
+
+
 def test_insert_vectors_and_add_texts() -> None:
     calls = []
 
@@ -123,6 +212,8 @@ def test_insert_vectors_and_add_texts() -> None:
         metadatas=[{"a": 1}, {"b": 2}],
     )
     assert result == {"inserted": 2}
+    assert client.datasets.insert("ds_1", [{"id": "three", "values": [0.5]}]) == {"inserted": 2}
+    assert client.datasets.embed("ds_1", text="one") == {"embeddings": [[0.1, 0.2], [0.3, 0.4]]}
     assert calls[0] == ("/datasets/ds_1/embed", {"texts": ["one", "two"]})
     assert calls[1][0] == "/datasets/ds_1/insert"
     assert calls[1][1]["vectors"][0] == {
@@ -130,6 +221,34 @@ def test_insert_vectors_and_add_texts() -> None:
         "values": [0.1, 0.2],
         "metadata": {"a": 1, "text": "one"},
     }
+
+
+def test_dataset_requires_identifier() -> None:
+    client = make_client(lambda request: json_response({}))
+    with pytest.raises(ValueError):
+        Dataset(client.datasets, {"name": "missing-id"})
+
+
+def test_dataset_client_methods_require_client() -> None:
+    dataset = Dataset(VectorAmp(transport=DummyTransport()).datasets, {"id": "ds_1"})
+    dataset.client = None
+    with pytest.raises(TypeError):
+        dataset.ask("hello")
+    with pytest.raises(TypeError):
+        dataset.ingest_files(["a.txt"])
+    with pytest.raises(TypeError):
+        dataset.ingest_source("source_1")
+
+
+class DummyTransport:
+    def request(self, *args, **kwargs):
+        return None
+
+    def stream(self, *args, **kwargs):
+        yield {}
+
+    def close(self):
+        pass
 
 
 def test_add_texts_validates_lengths() -> None:
