@@ -21,7 +21,15 @@ class SourceBuilder(Protocol):
 
 @dataclass(frozen=True)
 class GenericSource:
-    """Escape hatch for source types not yet modeled by the SDK."""
+    """Escape hatch for source types not yet modeled by the SDK.
+
+    Args:
+        name: Source name. Defaults to the normalized ``source_type``.
+        source_type: API source type. Required.
+        config: Source-specific configuration.
+        description: Optional source description.
+        metadata: Optional source metadata.
+    """
 
     name: Optional[str] = None
     source_type: str = ""
@@ -30,6 +38,7 @@ class GenericSource:
     metadata: Optional[Mapping[str, Any]] = None
 
     def to_create_request(self) -> JSON:
+        """Return source-create request fields for this generic source."""
         if not self.source_type:
             raise ValueError("GenericSource requires source_type.")
         return _source_body(
@@ -43,7 +52,22 @@ class GenericSource:
 
 @dataclass(frozen=True)
 class WebSource:
-    """Web crawler ingestion source."""
+    """Web crawler ingestion source.
+
+    Args:
+        name: Source name. Defaults to ``web-{host-or-path}`` from the first URL.
+        start_urls: Crawl entry URLs. At least one URL is required.
+        max_depth: Optional crawl depth limit.
+        max_pages: Optional page limit.
+        allowed_domains: Optional domain allow-list.
+        include_patterns: Optional URL include patterns.
+        exclude_patterns: Optional URL exclude patterns.
+        crawl_delay_seconds: Optional delay between requests.
+        sync_mode: Sync mode. Defaults to ``"full"``.
+        description: Optional source description.
+        metadata: Optional source metadata.
+        config_extra: Optional extra config fields merged into the request.
+    """
 
     name: Optional[str] = None
     start_urls: Sequence[str] = ()
@@ -59,6 +83,7 @@ class WebSource:
     config_extra: Optional[Mapping[str, Any]] = None
 
     def to_create_request(self) -> JSON:
+        """Return source-create request fields for this web source."""
         if not self.start_urls:
             raise ValueError("WebSource requires at least one start URL.")
         config: JSON = {"start_urls": list(self.start_urls), "sync_mode": self.sync_mode}
@@ -80,7 +105,24 @@ class WebSource:
 
 @dataclass(frozen=True)
 class S3Source:
-    """Amazon S3 ingestion source."""
+    """Amazon S3 ingestion source.
+
+    Args:
+        name: Source name. Defaults to ``s3-{bucket}``.
+        bucket: S3 bucket name. Required.
+        region: AWS region. Defaults to ``"us-east-1"``.
+        prefix: Optional key prefix.
+        sync_mode: Sync mode. Defaults to ``"full"``.
+        access_key_id: Optional AWS access key id.
+        secret_access_key: Optional AWS secret access key.
+        role_arn: Optional role ARN.
+        endpoint_url: Optional S3-compatible endpoint URL.
+        file_patterns: Optional file pattern filters.
+        max_file_size_mb: Optional max file size in MB.
+        description: Optional source description.
+        metadata: Optional source metadata.
+        config_extra: Optional extra config fields merged into the request.
+    """
 
     name: Optional[str] = None
     bucket: str = ""
@@ -98,6 +140,7 @@ class S3Source:
     config_extra: Optional[Mapping[str, Any]] = None
 
     def to_create_request(self) -> JSON:
+        """Return source-create request fields for this S3 source."""
         if not self.bucket:
             raise ValueError("S3Source requires bucket.")
         config: JSON = {"bucket": self.bucket, "region": self.region, "sync_mode": self.sync_mode}
@@ -120,7 +163,23 @@ class S3Source:
 
 @dataclass(frozen=True)
 class GoogleDriveSource:
-    """Google Drive ingestion source."""
+    """Google Drive ingestion source.
+
+    Args:
+        name: Source name. Defaults to ``gdrive-{first-folder-or-file-id}`` or
+            ``gdrive``.
+        folder_ids: Optional folder ids to ingest.
+        file_ids: Optional file ids to ingest.
+        auth_mode: Auth mode. Defaults to ``"oauth"``.
+        oauth_credentials: Optional OAuth credential payload.
+        include_shared_drives: Optional shared-drive toggle.
+        sync_mode: Sync mode. Defaults to ``"full"``.
+        service_account_json: Optional service-account credential payload.
+        credentials_json: Optional generic credential payload.
+        description: Optional source description.
+        metadata: Optional source metadata.
+        config_extra: Optional extra config fields merged into the request.
+    """
 
     name: Optional[str] = None
     folder_ids: Optional[Sequence[str]] = None
@@ -136,6 +195,7 @@ class GoogleDriveSource:
     config_extra: Optional[Mapping[str, Any]] = None
 
     def to_create_request(self) -> JSON:
+        """Return source-create request fields for this Google Drive source."""
         config: JSON = {"auth_mode": self.auth_mode, "sync_mode": self.sync_mode}
         _set_optional_sequence(config, "folder_ids", self.folder_ids)
         _set_optional_sequence(config, "file_ids", self.file_ids)
@@ -161,7 +221,16 @@ class FileUploadSource:
     """File-upload ingestion source.
 
     This models the source record only. Use ``dataset.ingest_files`` or
-    ``client.ingestion.ingest_files`` for the local presigned-upload flow.
+    ``client.ingestion.ingest_files`` for the local presigned-upload flow; those
+    helpers auto-create a ``file_upload`` source when uploading files.
+
+    Args:
+        name: Source name. Defaults to ``"vectoramp-python-upload"``.
+        storage_provider: Upload storage provider. Defaults to ``"s3"``.
+        sync_mode: Sync mode. Defaults to ``"full"``.
+        description: Optional source description.
+        metadata: Optional source metadata.
+        config_extra: Optional extra config fields merged into the request.
     """
 
     name: str = "vectoramp-python-upload"
@@ -172,6 +241,7 @@ class FileUploadSource:
     config_extra: Optional[Mapping[str, Any]] = None
 
     def to_create_request(self) -> JSON:
+        """Return source-create request fields for this file-upload source."""
         config: JSON = {
             "storage_provider": self.storage_provider,
             "sync_mode": self.sync_mode,

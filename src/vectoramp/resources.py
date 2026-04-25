@@ -57,6 +57,33 @@ class Dataset:
         include_documents: Optional[bool] = None,
         include_metadata: Optional[bool] = None,
     ) -> JSON:
+        """Search this dataset by text or vector.
+
+        Args:
+            query: Convenience query; ``str`` maps to text search and a float
+                sequence maps to vector search.
+            vector: Explicit vector query. Mutually exclusive with ``query`` and
+                ``text``.
+            text: Explicit text query. Mutually exclusive with ``query`` and
+                ``vector``.
+            top_k: Maximum matches to return. Defaults to ``10``.
+            filters: Exact-match metadata filters.
+            advanced_filters: API-native advanced metadata filters.
+            embedding_provider: Optional provider override for text queries.
+            embedding_model: Optional model override for text queries.
+            nprobe_override: Optional ANN probe override.
+            rerank_depth_override: Optional rerank depth override.
+            hybrid: Optional hybrid dense/sparse search toggle.
+            sparse_query: Optional sparse query text for hybrid search.
+            alpha: Optional dense/sparse weighting for hybrid search.
+            include_embeddings: Whether result vectors include embeddings.
+            include_documents: Whether result vectors include document text.
+            include_metadata: Whether result vectors include metadata; defaults to
+                API behavior when omitted.
+
+        Returns:
+            Search response JSON.
+        """
         return self.service.search(
             self.id,
             query,
@@ -78,9 +105,25 @@ class Dataset:
         )
 
     def insert(self, vectors: Sequence[Vector]) -> JSON:
+        """Insert vectors into this dataset.
+
+        Args:
+            vectors: Vector records containing values plus optional id/metadata.
+
+        Returns:
+            Insert response JSON.
+        """
         return self.service.insert_vectors(self.id, vectors)
 
     def insert_vectors(self, vectors: Sequence[Vector]) -> JSON:
+        """Insert vectors into this dataset.
+
+        Args:
+            vectors: Vector records containing values plus optional id/metadata.
+
+        Returns:
+            Insert response JSON.
+        """
         return self.service.insert_vectors(self.id, vectors)
 
     def add_texts(
@@ -90,9 +133,20 @@ class Dataset:
         ids: Optional[Sequence[str]] = None,
         metadatas: Optional[Sequence[Mapping[str, Any]]] = None,
     ) -> JSON:
+        """Embed text values with the dataset model and insert them.
+
+        Args:
+            texts: Single text or sequence of texts.
+            ids: Optional vector ids. Length must match ``texts`` when provided.
+            metadatas: Optional per-text metadata. Length must match ``texts``.
+
+        Returns:
+            Insert response JSON.
+        """
         return self.service.add_texts(self.id, texts, ids=ids, metadatas=metadatas)
 
     def delete(self) -> Any:
+        """Delete this dataset and return the API response."""
         return self.service.delete(self.id)
 
     def ask(
@@ -103,6 +157,17 @@ class Dataset:
         conversation_history: Optional[Sequence[ConversationTurn]] = None,
         include_sources: bool = True,
     ) -> JSON:
+        """Ask a non-streaming RAG question scoped to this dataset.
+
+        Args:
+            query: Natural-language question.
+            top_k: Number of retrieved chunks to consider. Defaults to ``5``.
+            conversation_history: Optional prior chat turns.
+            include_sources: Whether to include source chunks. Defaults to ``True``.
+
+        Returns:
+            JSON response from ``/intelligence/query``.
+        """
         if self.client is None:
             raise TypeError("Dataset.ask requires a Dataset created by a VectorAmp client.")
         return self.client.intelligence.query(
@@ -120,6 +185,20 @@ class Dataset:
         source_name: Optional[str] = None,
         description: Optional[str] = None,
     ) -> JSON:
+        """Upload local files into this dataset.
+
+        Creates a temporary ``file_upload`` source automatically. When
+        ``source_name`` is omitted, the name is generated as
+        ``file-upload-{first-file-stem}-{random-suffix}``.
+
+        Args:
+            paths: Local file paths to upload. Must contain at least one path.
+            source_name: Optional source name for the auto-created source.
+            description: Optional description for the source.
+
+        Returns:
+            Upload completion response JSON, including the created ingestion job.
+        """
         if self.client is None:
             raise TypeError(
                 "Dataset.ingest_files requires a Dataset created by a VectorAmp client."
@@ -132,6 +211,16 @@ class Dataset:
         )
 
     def ingest_source(self, source: SourceInput, *, pipeline_id: Optional[str] = None) -> JSON:
+        """Start ingestion for an existing or newly-created source.
+
+        Args:
+            source: Existing source id, or a source builder that will be created
+                before starting the job.
+            pipeline_id: Optional pipeline override.
+
+        Returns:
+            Ingestion job response JSON.
+        """
         if self.client is None:
             raise TypeError(
                 "Dataset.ingest_source requires a Dataset created by a VectorAmp client."
@@ -144,15 +233,19 @@ class Dataset:
         )
 
     def get(self, key: str, default: Any = None) -> Any:
+        """Return a value from the raw dataset payload, or ``default``."""
         return self.raw_data.get(key, default)
 
     def keys(self) -> KeysView[str]:
+        """Return keys from the raw dataset payload."""
         return self.raw_data.keys()
 
     def values(self) -> ValuesView[Any]:
+        """Return values from the raw dataset payload."""
         return self.raw_data.values()
 
     def items(self) -> ItemsView[str, Any]:
+        """Return items from the raw dataset payload."""
         return self.raw_data.items()
 
     def __getitem__(self, key: str) -> Any:
@@ -186,6 +279,15 @@ class DatasetsResource:
         self.client = client
 
     def list(self, *, limit: int = 50, offset: int = 0) -> JSON:
+        """List datasets.
+
+        Args:
+            limit: Maximum datasets to return. Defaults to ``50``.
+            offset: Pagination offset. Defaults to ``0``.
+
+        Returns:
+            Page JSON whose ``datasets`` entries are ``Dataset`` objects.
+        """
         page = self._transport.request(
             "GET", "/datasets", params={"limit": limit, "offset": offset}
         )
@@ -195,6 +297,14 @@ class DatasetsResource:
         return page
 
     def get(self, dataset_id: str) -> Dataset:
+        """Return one dataset by id.
+
+        Args:
+            dataset_id: Dataset identifier.
+
+        Returns:
+            ``Dataset`` wrapper around the API payload.
+        """
         return self._to_dataset(self._transport.request("GET", f"/datasets/{dataset_id}"))
 
     def create(
@@ -211,7 +321,22 @@ class DatasetsResource:
     ) -> Dataset:
         """Create a SABLE dataset.
 
-        `index_type` is intentionally not exposed; the SDK always requests SABLE.
+        ``index_type`` is intentionally not exposed; the SDK always requests
+        SABLE.
+
+        Args:
+            name: Dataset name.
+            dim: Vector dimension.
+            metric: Distance metric. Defaults to ``"cosine"``.
+            embedding_provider: Embedding provider. Defaults to ``"vectoramp"``.
+            embedding_model: Embedding model. Defaults to
+                ``"Qwen/Qwen3-Embedding-4B"``.
+            filters: Optional filter schema/configuration.
+            metadata_schema: Optional metadata schema.
+            tuning: Optional SABLE tuning parameters.
+
+        Returns:
+            Created ``Dataset`` object.
         """
         body: JSON = {
             "name": name,
@@ -229,9 +354,22 @@ class DatasetsResource:
         return self._to_dataset(self._transport.request("POST", "/datasets", json_body=body))
 
     def delete(self, dataset_id: str) -> Any:
+        """Delete a dataset and return the API response.
+
+        Args:
+            dataset_id: Dataset identifier.
+        """
         return self._transport.request("DELETE", f"/datasets/{dataset_id}")
 
     def stats(self, dataset_id: str) -> JSON:
+        """Return dataset statistics.
+
+        Args:
+            dataset_id: Dataset identifier.
+
+        Returns:
+            Stats response JSON.
+        """
         return self._transport.request("GET", f"/datasets/{dataset_id}/stats")
 
     def search(
@@ -255,6 +393,34 @@ class DatasetsResource:
         include_documents: Optional[bool] = None,
         include_metadata: Optional[bool] = None,
     ) -> JSON:
+        """Search a dataset by text or vector.
+
+        Args:
+            dataset_id: Dataset identifier.
+            query: Convenience query; ``str`` maps to text search and a float
+                sequence maps to vector search.
+            vector: Explicit vector query. Mutually exclusive with ``query`` and
+                ``text``.
+            text: Explicit text query. Mutually exclusive with ``query`` and
+                ``vector``.
+            top_k: Maximum matches to return. Defaults to ``10``.
+            filters: Exact-match metadata filters.
+            advanced_filters: API-native advanced metadata filters.
+            embedding_provider: Optional provider override for text queries.
+            embedding_model: Optional model override for text queries.
+            nprobe_override: Optional ANN probe override.
+            rerank_depth_override: Optional rerank depth override.
+            hybrid: Optional hybrid dense/sparse search toggle.
+            sparse_query: Optional sparse query text for hybrid search.
+            alpha: Optional dense/sparse weighting for hybrid search.
+            include_embeddings: Whether result vectors include embeddings.
+            include_documents: Whether result vectors include document text.
+            include_metadata: Whether result vectors include metadata; defaults to
+                API behavior when omitted.
+
+        Returns:
+            Search response JSON.
+        """
         if query is not None:
             if vector is not None or text is not None:
                 raise ValueError("Provide query or vector/text, not both.")
@@ -287,11 +453,21 @@ class DatasetsResource:
         return self._transport.request("POST", f"/datasets/{dataset_id}/search", json_body=body)
 
     def insert_vectors(self, dataset_id: str, vectors: Sequence[Vector]) -> JSON:
+        """Insert vectors into a dataset.
+
+        Args:
+            dataset_id: Dataset identifier.
+            vectors: Vector records containing values plus optional id/metadata.
+
+        Returns:
+            Insert response JSON.
+        """
         return self._transport.request(
             "POST", f"/datasets/{dataset_id}/insert", json_body={"vectors": list(vectors)}
         )
 
     def insert(self, dataset_id: str, vectors: Sequence[Vector]) -> JSON:
+        """Alias for ``insert_vectors``."""
         return self.insert_vectors(dataset_id, vectors)
 
     def embed(
@@ -301,6 +477,16 @@ class DatasetsResource:
         text: Optional[str] = None,
         texts: Optional[Sequence[str]] = None,
     ) -> JSON:
+        """Embed one or more texts with the dataset embedding model.
+
+        Args:
+            dataset_id: Dataset identifier.
+            text: Single text to embed.
+            texts: Multiple texts to embed. Mutually exclusive with ``text``.
+
+        Returns:
+            Embedding response JSON.
+        """
         if (text is None) == (texts is None):
             raise ValueError("Provide exactly one of text or texts.")
         body: JSON = {"text": text} if text is not None else {"texts": list(texts or [])}
@@ -314,7 +500,17 @@ class DatasetsResource:
         ids: Optional[Sequence[str]] = None,
         metadatas: Optional[Sequence[Mapping[str, Any]]] = None,
     ) -> JSON:
-        """Embed texts with the dataset model and insert them as vectors."""
+        """Embed text values with the dataset model and insert them.
+
+        Args:
+            dataset_id: Dataset identifier.
+            texts: Single text or sequence of texts.
+            ids: Optional vector ids. Length must match ``texts`` when provided.
+            metadatas: Optional per-text metadata. Length must match ``texts``.
+
+        Returns:
+            Insert response JSON.
+        """
         text_list = [texts] if isinstance(texts, str) else list(texts)
         if ids is not None and len(ids) != len(text_list):
             raise ValueError("ids length must match texts length.")
@@ -337,6 +533,11 @@ class DatasetsResource:
         return self.insert_vectors(dataset_id, vectors)
 
     def ensure_engine(self, dataset_id: str) -> JSON:
+        """Ensure a dataset engine is loaded and return the API response.
+
+        Args:
+            dataset_id: Dataset identifier.
+        """
         return self._transport.request("POST", f"/datasets/{dataset_id}/ensure-engine")
 
     def _to_dataset(self, raw_data: Mapping[str, Any]) -> Dataset:
@@ -350,11 +551,21 @@ class IngestionResource:
         self._transport = transport
 
     def list_sources(self, *, limit: int = 50, offset: int = 0) -> JSON:
+        """List ingestion sources.
+
+        Args:
+            limit: Maximum sources to return. Defaults to ``50``.
+            offset: Pagination offset. Defaults to ``0``.
+
+        Returns:
+            Source page JSON.
+        """
         return self._transport.request(
             "GET", "/ingestion/sources", params={"limit": limit, "offset": offset}
         )
 
     def get_source(self, source_id: str) -> JSON:
+        """Return one ingestion source by id."""
         return self._transport.request("GET", f"/ingestion/sources/{source_id}")
 
     def create_source(
@@ -367,6 +578,19 @@ class IngestionResource:
         description: Optional[str] = None,
         metadata: Optional[Mapping[str, Any]] = None,
     ) -> JSON:
+        """Create an ingestion source.
+
+        Args:
+            source: Optional source builder such as ``WebSource`` or ``S3Source``.
+            name: Source name when not passing ``source``.
+            source_type: Source type when not passing ``source``.
+            config: Source config when not passing ``source``.
+            description: Optional source description.
+            metadata: Optional source metadata.
+
+        Returns:
+            Created source JSON.
+        """
         if source is not None:
             body = source.to_create_request()
         else:
@@ -384,6 +608,7 @@ class IngestionResource:
         return self._transport.request("POST", "/v1/sources", json_body=body)
 
     def create(self, source: SourceBuilder) -> JSON:
+        """Create an ingestion source from a source builder."""
         return self.create_source(source)
 
     def create_web(
@@ -401,6 +626,14 @@ class IngestionResource:
         metadata: Optional[Mapping[str, Any]] = None,
         config_extra: Optional[Mapping[str, Any]] = None,
     ) -> JSON:
+        """Create a web crawler source.
+
+        ``name`` defaults to ``web-{host-or-path}`` from the first start URL.
+        Optional crawl settings are omitted from the request when ``None``.
+
+        Returns:
+            Created source JSON.
+        """
         return self.create_source(
             WebSource(
                 name=name,
@@ -435,6 +668,15 @@ class IngestionResource:
         metadata: Optional[Mapping[str, Any]] = None,
         config_extra: Optional[Mapping[str, Any]] = None,
     ) -> JSON:
+        """Create an Amazon S3 source.
+
+        ``name`` defaults to ``s3-{bucket}``; ``region`` defaults to
+        ``"us-east-1"`` and ``sync_mode`` defaults to ``"full"``. Optional
+        credentials and file settings are omitted when ``None``.
+
+        Returns:
+            Created source JSON.
+        """
         return self.create_source(
             S3Source(
                 name=name,
@@ -470,6 +712,15 @@ class IngestionResource:
         metadata: Optional[Mapping[str, Any]] = None,
         config_extra: Optional[Mapping[str, Any]] = None,
     ) -> JSON:
+        """Create a Google Drive source.
+
+        ``name`` defaults to ``gdrive-{first-folder-or-file-id}`` or ``gdrive``.
+        ``auth_mode`` defaults to ``"oauth"`` and ``sync_mode`` to ``"full"``.
+        Optional auth/config values are omitted when ``None``.
+
+        Returns:
+            Created source JSON.
+        """
         return self.create_source(
             GoogleDriveSource(
                 name=name,
@@ -497,6 +748,20 @@ class IngestionResource:
         metadata: Optional[Mapping[str, Any]] = None,
         config_extra: Optional[Mapping[str, Any]] = None,
     ) -> JSON:
+        """Create a file-upload source record.
+
+        Args:
+            name: Source name. Defaults to ``"vectoramp-python-upload"``.
+            storage_provider: Upload storage provider. Defaults to ``"s3"``.
+            sync_mode: Source sync mode. Defaults to ``"full"``.
+            description: Optional source description.
+            metadata: Optional source metadata.
+            config_extra: Optional extra config fields merged into the request.
+
+        Returns:
+            Created source JSON. For local file upload, prefer ``ingest_files``,
+            which creates this source automatically and uploads the files.
+        """
         return self.create_source(
             FileUploadSource(
                 name=name,
@@ -509,6 +774,14 @@ class IngestionResource:
         )
 
     def resolve_source_id(self, source: SourceInput) -> str:
+        """Return a source id, creating builder inputs when needed.
+
+        Args:
+            source: Existing source id or source builder.
+
+        Returns:
+            Source identifier string.
+        """
         if isinstance(source, str):
             return source
         created = self.create_source(source)
@@ -520,6 +793,16 @@ class IngestionResource:
     def start_job(
         self, *, source_id: str, dataset_id: str, pipeline_id: Optional[str] = None
     ) -> JSON:
+        """Start an ingestion job.
+
+        Args:
+            source_id: Source identifier.
+            dataset_id: Target dataset identifier.
+            pipeline_id: Optional pipeline override.
+
+        Returns:
+            Ingestion job response JSON.
+        """
         body: JSON = {"source_id": source_id, "dataset_id": dataset_id}
         if pipeline_id is not None:
             body["pipeline_id"] = pipeline_id
@@ -528,6 +811,16 @@ class IngestionResource:
     def list_jobs(
         self, *, dataset_id: Optional[str] = None, limit: int = 50, offset: int = 0
     ) -> JSON:
+        """List ingestion jobs.
+
+        Args:
+            dataset_id: Optional dataset filter.
+            limit: Maximum jobs to return. Defaults to ``50``.
+            offset: Pagination offset. Defaults to ``0``.
+
+        Returns:
+            Job page JSON.
+        """
         return self._transport.request(
             "GET",
             "/ingestion/jobs",
@@ -535,14 +828,34 @@ class IngestionResource:
         )
 
     def get_job(self, job_id: str) -> JSON:
+        """Return one ingestion job by id."""
         return self._transport.request("GET", f"/ingestion/jobs/{job_id}")
 
     def init_upload(self, source_id: str, files: Sequence[Mapping[str, Any]]) -> JSON:
+        """Initialize presigned uploads for a file-upload source.
+
+        Args:
+            source_id: File-upload source identifier.
+            files: File descriptors with name, size, and content type.
+
+        Returns:
+            Upload session JSON, including upload URLs and job id.
+        """
         return self._transport.request(
             "POST", f"/v1/sources/{source_id}/upload/init", json_body={"files": list(files)}
         )
 
     def complete_upload(self, source_id: str, *, job_id: str, file_ids: Sequence[str]) -> JSON:
+        """Complete a file-upload session.
+
+        Args:
+            source_id: File-upload source identifier.
+            job_id: Upload job identifier returned by ``init_upload``.
+            file_ids: Uploaded file identifiers returned by ``init_upload``.
+
+        Returns:
+            Upload completion response JSON.
+        """
         return self._transport.request(
             "POST",
             f"/v1/sources/{source_id}/upload/complete",
@@ -557,7 +870,22 @@ class IngestionResource:
         source_name: Optional[str] = None,
         description: Optional[str] = None,
     ) -> JSON:
-        """Create a file-upload source, upload local files, and complete the upload flow."""
+        """Create a file-upload source, upload files, and complete the flow.
+
+        Creates a ``file_upload`` source automatically with config
+        ``{"storage_provider": "s3", "sync_mode": "full"}`` and metadata
+        containing ``dataset_id``. When ``source_name`` is omitted, the name is
+        generated as ``file-upload-{first-file-stem}-{random-suffix}``.
+
+        Args:
+            dataset_id: Target dataset identifier.
+            paths: Local file paths to upload. Must contain at least one path.
+            source_name: Optional source name for the auto-created source.
+            description: Optional description for the source.
+
+        Returns:
+            Upload completion response JSON, including the created ingestion job.
+        """
         file_paths = [Path(path) for path in paths]
         if not file_paths:
             raise ValueError("ingest_files requires at least one path.")
@@ -623,6 +951,19 @@ class IntelligenceResource:
         conversation_history: Optional[Sequence[ConversationTurn]] = None,
         include_sources: bool = True,
     ) -> JSON:
+        """Ask a non-streaming RAG question.
+
+        Args:
+            query: Natural-language question.
+            dataset_id: Optional dataset to ground the answer in. When omitted,
+                the API chooses its configured/default scope.
+            top_k: Number of retrieved chunks to consider. Defaults to ``5``.
+            conversation_history: Optional prior chat turns.
+            include_sources: Whether to include source chunks. Defaults to ``True``.
+
+        Returns:
+            JSON response from ``/intelligence/query``.
+        """
         body = self._body(
             query,
             dataset_id=dataset_id,
@@ -642,6 +983,19 @@ class IntelligenceResource:
         conversation_history: Optional[Sequence[ConversationTurn]] = None,
         include_sources: bool = True,
     ) -> Iterator[JSON]:
+        """Yield Server-Sent Event chunks for a streaming RAG answer.
+
+        Args:
+            query: Natural-language question.
+            dataset_id: Optional dataset to ground the answer in. When omitted,
+                the API chooses its configured/default scope.
+            top_k: Number of retrieved chunks to consider. Defaults to ``5``.
+            conversation_history: Optional prior chat turns.
+            include_sources: Whether to include source chunks. Defaults to ``True``.
+
+        Returns:
+            Iterator of JSON Server-Sent Event payloads.
+        """
         body = self._body(
             query,
             dataset_id=dataset_id,
