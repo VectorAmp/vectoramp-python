@@ -14,7 +14,22 @@ from .types import JSON, ConversationTurn
 
 
 class VectorAmp:
-    """Synchronous VectorAmp API client."""
+    """Synchronous VectorAmp API client.
+
+    Args:
+        api_key: API key to send as bearer auth. Defaults to
+            ``VECTORAMP_API_KEY`` when omitted.
+        base_url: API origin. Defaults to ``https://api.vectoramp.com``.
+        timeout: Request timeout in seconds. Defaults to ``30.0``.
+        transport: Optional custom transport, primarily for tests or adapters.
+        http_client: Optional ``httpx.Client`` used by the default REST transport.
+
+    Attributes:
+        datasets: Dataset management, search, embedding, and insertion APIs.
+        ingestion: Source, upload, and ingestion-job APIs.
+        sources: Alias for ``ingestion``.
+        intelligence: RAG query and streaming APIs.
+    """
 
     def __init__(
         self,
@@ -46,7 +61,19 @@ class VectorAmp:
         conversation_history: Optional[list[ConversationTurn]] = None,
         include_sources: bool = True,
     ) -> JSON:
-        """Ask a non-streaming RAG question."""
+        """Ask a non-streaming RAG question.
+
+        Args:
+            query: Natural-language question.
+            dataset_id: Optional dataset to ground the answer in. When omitted,
+                the API chooses its configured/default scope.
+            top_k: Number of retrieved chunks to consider. Defaults to ``5``.
+            conversation_history: Optional prior chat turns.
+            include_sources: Whether to include source chunks. Defaults to ``True``.
+
+        Returns:
+            JSON response from ``/intelligence/query``.
+        """
         return self.intelligence.query(
             query,
             dataset_id=dataset_id,
@@ -64,7 +91,19 @@ class VectorAmp:
         conversation_history: Optional[list[ConversationTurn]] = None,
         include_sources: bool = True,
     ) -> Iterator[JSON]:
-        """Yield Server-Sent Event chunks for a streaming RAG answer."""
+        """Yield Server-Sent Event chunks for a streaming RAG answer.
+
+        Args:
+            query: Natural-language question.
+            dataset_id: Optional dataset to ground the answer in. When omitted,
+                the API chooses its configured/default scope.
+            top_k: Number of retrieved chunks to consider. Defaults to ``5``.
+            conversation_history: Optional prior chat turns.
+            include_sources: Whether to include source chunks. Defaults to ``True``.
+
+        Returns:
+            Iterator of JSON Server-Sent Event payloads.
+        """
         yield from self.intelligence.stream(
             query,
             dataset_id=dataset_id,
@@ -74,6 +113,7 @@ class VectorAmp:
         )
 
     def close(self) -> None:
+        """Close the underlying transport and HTTP connection pool."""
         self.transport.close()
 
     def __enter__(self) -> "VectorAmp":
