@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal, Mapping, Optional, Protocol, Sequence, Union, runtime_checkable
+from urllib.parse import urlparse
 
 from .types import JSON
 
@@ -22,15 +23,17 @@ class SourceBuilder(Protocol):
 class GenericSource:
     """Escape hatch for source types not yet modeled by the SDK."""
 
-    name: str
-    source_type: str
-    config: Mapping[str, Any]
+    name: Optional[str] = None
+    source_type: str = ""
+    config: Mapping[str, Any] = field(default_factory=dict)
     description: Optional[str] = None
     metadata: Optional[Mapping[str, Any]] = None
 
     def to_create_request(self) -> JSON:
+        if not self.source_type:
+            raise ValueError("GenericSource requires source_type.")
         return _source_body(
-            name=self.name,
+            name=self.name or _default_source_name(self.source_type),
             source_type=self.source_type,
             config=self.config,
             description=self.description,
@@ -42,8 +45,8 @@ class GenericSource:
 class WebSource:
     """Web crawler ingestion source."""
 
-    name: str
-    start_urls: Sequence[str]
+    name: Optional[str] = None
+    start_urls: Sequence[str] = ()
     max_depth: Optional[int] = None
     max_pages: Optional[int] = None
     allowed_domains: Optional[Sequence[str]] = None
@@ -56,6 +59,8 @@ class WebSource:
     config_extra: Optional[Mapping[str, Any]] = None
 
     def to_create_request(self) -> JSON:
+        if not self.start_urls:
+            raise ValueError("WebSource requires at least one start URL.")
         config: JSON = {"start_urls": list(self.start_urls), "sync_mode": self.sync_mode}
         _set_optional(config, "max_depth", self.max_depth)
         _set_optional(config, "max_pages", self.max_pages)
@@ -65,7 +70,7 @@ class WebSource:
         _set_optional(config, "crawl_delay_seconds", self.crawl_delay_seconds)
         _merge_extra(config, self.config_extra)
         return _source_body(
-            name=self.name,
+            name=self.name or _default_web_source_name(self.start_urls),
             source_type="web",
             config=config,
             description=self.description,
@@ -77,9 +82,9 @@ class WebSource:
 class S3Source:
     """Amazon S3 ingestion source."""
 
-    name: str
-    bucket: str
-    region: str
+    name: Optional[str] = None
+    bucket: str = ""
+    region: str = "us-east-1"
     prefix: Optional[str] = None
     sync_mode: str = "full"
     access_key_id: Optional[str] = None
@@ -93,6 +98,8 @@ class S3Source:
     config_extra: Optional[Mapping[str, Any]] = None
 
     def to_create_request(self) -> JSON:
+        if not self.bucket:
+            raise ValueError("S3Source requires bucket.")
         config: JSON = {"bucket": self.bucket, "region": self.region, "sync_mode": self.sync_mode}
         _set_optional(config, "prefix", self.prefix)
         _set_optional(config, "access_key_id", self.access_key_id)
@@ -103,7 +110,7 @@ class S3Source:
         _set_optional(config, "max_file_size_mb", self.max_file_size_mb)
         _merge_extra(config, self.config_extra)
         return _source_body(
-            name=self.name,
+            name=self.name or _default_source_name("s3", self.bucket),
             source_type="s3",
             config=config,
             description=self.description,
@@ -115,7 +122,7 @@ class S3Source:
 class GoogleDriveSource:
     """Google Drive ingestion source."""
 
-    name: str
+    name: Optional[str] = None
     folder_ids: Optional[Sequence[str]] = None
     file_ids: Optional[Sequence[str]] = None
     auth_mode: str = "oauth"
@@ -141,7 +148,7 @@ class GoogleDriveSource:
             config["credentials_json"] = dict(self.credentials_json)
         _merge_extra(config, self.config_extra)
         return _source_body(
-            name=self.name,
+            name=self.name or _default_google_drive_source_name(self.folder_ids, self.file_ids),
             source_type="gdrive",
             config=config,
             description=self.description,
@@ -197,6 +204,38 @@ def _source_body(
     if metadata is not None:
         body["metadata"] = dict(metadata)
     return body
+
+
+def _default_web_source_name(start_urls: Sequence[str]) -> str:
+    first_url = start_urls[0]
+    parsed = urlparse(first_url)
+    hint = parsed.netloc or parsed.path or first_url
+    return _default_source_name("web", hint)
+
+
+def _default_google_drive_source_name(
+    folder_ids: Optional[Sequence[str]], file_ids: Optional[Sequence[str]]
+) -> str:
+    hint = None
+    if folder_ids:
+        hint = folder_ids[0]
+    elif file_ids:
+        hint = file_ids[0]
+    return _default_source_name("gdrive", hint)
+
+
+def _default_source_name(source_type: str, hint: Optional[str] = None) -> str:
+    parts = [source_type.replace("_", "-")]
+    if hint:
+        slug = _slugify(str(hint))
+        if slug:
+            parts.append(slug)
+    return "-".join(parts)
+
+
+def _slugify(value: str) -> str:
+    slug = "".join(char.lower() if char.isalnum() else "-" for char in value)
+    return "-".join(part for part in slug.split("-") if part)[:48]
 
 
 def _set_optional(config: JSON, key: str, value: Any) -> None:

@@ -39,6 +39,7 @@ class Dataset:
 
     def search(
         self,
+        query: Optional[Union[str, Sequence[float]]] = None,
         *,
         vector: Optional[Sequence[float]] = None,
         text: Optional[str] = None,
@@ -58,6 +59,7 @@ class Dataset:
     ) -> JSON:
         return self.service.search(
             self.id,
+            query,
             vector=vector,
             text=text,
             top_k=top_k,
@@ -83,7 +85,7 @@ class Dataset:
 
     def add_texts(
         self,
-        texts: Sequence[str],
+        texts: Union[str, Sequence[str]],
         *,
         ids: Optional[Sequence[str]] = None,
         metadatas: Optional[Sequence[Mapping[str, Any]]] = None,
@@ -115,7 +117,7 @@ class Dataset:
         self,
         paths: Sequence[PathLike],
         *,
-        source_name: str = "vectoramp-python-upload",
+        source_name: Optional[str] = None,
         description: Optional[str] = None,
     ) -> JSON:
         if self.client is None:
@@ -235,6 +237,7 @@ class DatasetsResource:
     def search(
         self,
         dataset_id: str,
+        query: Optional[Union[str, Sequence[float]]] = None,
         *,
         vector: Optional[Sequence[float]] = None,
         text: Optional[str] = None,
@@ -252,6 +255,13 @@ class DatasetsResource:
         include_documents: Optional[bool] = None,
         include_metadata: Optional[bool] = None,
     ) -> JSON:
+        if query is not None:
+            if vector is not None or text is not None:
+                raise ValueError("Provide query or vector/text, not both.")
+            if isinstance(query, str):
+                text = query
+            else:
+                vector = query
         if (vector is None) == (text is None):
             raise ValueError("Provide exactly one of vector or text.")
         body: JSON = {"top_k": top_k}
@@ -299,21 +309,22 @@ class DatasetsResource:
     def add_texts(
         self,
         dataset_id: str,
-        texts: Sequence[str],
+        texts: Union[str, Sequence[str]],
         *,
         ids: Optional[Sequence[str]] = None,
         metadatas: Optional[Sequence[Mapping[str, Any]]] = None,
     ) -> JSON:
         """Embed texts with the dataset model and insert them as vectors."""
-        if ids is not None and len(ids) != len(texts):
+        text_list = [texts] if isinstance(texts, str) else list(texts)
+        if ids is not None and len(ids) != len(text_list):
             raise ValueError("ids length must match texts length.")
-        if metadatas is not None and len(metadatas) != len(texts):
+        if metadatas is not None and len(metadatas) != len(text_list):
             raise ValueError("metadatas length must match texts length.")
-        embeddings = self.embed(dataset_id, texts=texts).get("embeddings", [])
-        if len(embeddings) != len(texts):
+        embeddings = self.embed(dataset_id, texts=text_list).get("embeddings", [])
+        if len(embeddings) != len(text_list):
             raise ValueError("Embedding response length did not match texts length.")
         vectors: list[Vector] = []
-        for index, (text, values) in enumerate(zip(texts, embeddings)):
+        for index, (text, values) in enumerate(zip(text_list, embeddings)):
             metadata = dict(metadatas[index]) if metadatas is not None else {}
             metadata.setdefault("text", text)
             vectors.append(
@@ -378,8 +389,8 @@ class IngestionResource:
     def create_web(
         self,
         *,
-        name: str,
         start_urls: Sequence[str],
+        name: Optional[str] = None,
         max_depth: Optional[int] = None,
         max_pages: Optional[int] = None,
         allowed_domains: Optional[Sequence[str]] = None,
@@ -409,9 +420,9 @@ class IngestionResource:
     def create_s3(
         self,
         *,
-        name: str,
         bucket: str,
-        region: str,
+        name: Optional[str] = None,
+        region: str = "us-east-1",
         prefix: Optional[str] = None,
         sync_mode: str = "full",
         access_key_id: Optional[str] = None,
@@ -446,7 +457,7 @@ class IngestionResource:
     def create_google_drive(
         self,
         *,
-        name: str,
+        name: Optional[str] = None,
         folder_ids: Optional[Sequence[str]] = None,
         file_ids: Optional[Sequence[str]] = None,
         auth_mode: str = "oauth",
@@ -543,19 +554,21 @@ class IngestionResource:
         *,
         dataset_id: str,
         paths: Sequence[PathLike],
-        source_name: str = "vectoramp-python-upload",
+        source_name: Optional[str] = None,
         description: Optional[str] = None,
     ) -> JSON:
         """Create a file-upload source, upload local files, and complete the upload flow."""
+        file_paths = [Path(path) for path in paths]
+        if not file_paths:
+            raise ValueError("ingest_files requires at least one path.")
         source = self.create_source(
-            name=source_name,
+            name=source_name or self._default_upload_source_name(file_paths),
             source_type="file_upload",
             description=description,
             config={"storage_provider": "s3", "sync_mode": "full"},
             metadata={"dataset_id": dataset_id},
         )
         source_id = str(source.get("id") or source.get("source_id"))
-        file_paths = [Path(path) for path in paths]
         files = [self._file_descriptor(path) for path in file_paths]
         upload = self.init_upload(source_id, files)
         uploads = upload.get("uploads", [])
@@ -574,6 +587,13 @@ class IngestionResource:
                 content_type=self._guess_content_type(path),
             )
         return self.complete_upload(source_id, job_id=str(upload["job_id"]), file_ids=file_ids)
+
+    @staticmethod
+    def _default_upload_source_name(paths: Sequence[Path]) -> str:
+        first_stem = paths[0].stem or "files"
+        slug = "".join(char.lower() if char.isalnum() else "-" for char in first_stem)
+        slug = "-".join(part for part in slug.split("-") if part)[:32] or "files"
+        return f"file-upload-{slug}-{uuid.uuid4().hex[:8]}"
 
     @staticmethod
     def _file_descriptor(path: Path) -> JSON:

@@ -105,6 +105,8 @@ def test_search_requires_exactly_one_query() -> None:
         client.datasets.search("ds_1")
     with pytest.raises(ValueError):
         client.datasets.search("ds_1", vector=[0.1], text="hello")
+    with pytest.raises(ValueError):
+        client.datasets.search("ds_1", "hello", text="hello")
 
 
 def test_search_text_payload() -> None:
@@ -117,7 +119,7 @@ def test_search_text_payload() -> None:
     client = make_client(handler)
     client.datasets.search(
         "ds_1",
-        text="hello",
+        "hello",
         top_k=3,
         filters={"kind": "doc"},
         advanced_filters=[{"field": "price", "op": "gt", "value": 5}],
@@ -211,6 +213,9 @@ def test_insert_vectors_and_add_texts() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append((request.url.path, json.loads(request.content)))
         if request.url.path.endswith("/embed"):
+            body = json.loads(request.content)
+            if body.get("texts") == ["single"]:
+                return json_response({"embeddings": [[0.9, 1.0]]})
             return json_response({"embeddings": [[0.1, 0.2], [0.3, 0.4]]})
         return json_response({"inserted": 2})
 
@@ -223,6 +228,7 @@ def test_insert_vectors_and_add_texts() -> None:
     )
     assert result == {"inserted": 2}
     assert client.datasets.insert("ds_1", [{"id": "three", "values": [0.5]}]) == {"inserted": 2}
+    assert client.datasets.add_texts("ds_1", "single")["inserted"] == 2
     assert client.datasets.embed("ds_1", text="one") == {"embeddings": [[0.1, 0.2], [0.3, 0.4]]}
     assert calls[0] == ("/datasets/ds_1/embed", {"texts": ["one", "two"]})
     assert calls[1][0] == "/datasets/ds_1/insert"
@@ -231,6 +237,7 @@ def test_insert_vectors_and_add_texts() -> None:
         "values": [0.1, 0.2],
         "metadata": {"a": 1, "text": "one"},
     }
+    assert calls[3] == ("/datasets/ds_1/embed", {"texts": ["single"]})
 
 
 def test_dataset_requires_identifier() -> None:
@@ -345,6 +352,14 @@ def test_typed_source_builders_use_ingestion_field_names() -> None:
         file_patterns=["*.pdf"],
         max_file_size_mb=100,
     ).to_create_request()["source_type"] == "s3"
+    assert WebSource(start_urls=["https://docs.example.com/path"]).to_create_request()[
+        "name"
+    ] == "web-docs-example-com"
+    assert S3Source(bucket="docs-bucket").to_create_request() == {
+        "name": "s3-docs-bucket",
+        "source_type": "s3",
+        "config": {"bucket": "docs-bucket", "region": "us-east-1", "sync_mode": "full"},
+    }
     assert GoogleDriveSource(
         name="drive",
         folder_ids=["folder_1"],
@@ -373,6 +388,9 @@ def test_typed_source_builders_use_ingestion_field_names() -> None:
         "source_type": "future",
         "config": {"field": "value"},
     }
+    assert GenericSource(source_type="future", config={"field": "value"}).to_create_request()[
+        "name"
+    ] == "future"
 
 
 def test_source_create_helpers_and_dataset_typed_ingest() -> None:
@@ -389,15 +407,13 @@ def test_source_create_helpers_and_dataset_typed_ingest() -> None:
 
     client = make_client(handler)
     assert client.sources is client.ingestion
-    assert client.sources.create_web(
-        name="web", start_urls=["https://example.com"], max_depth=1
-    )["uuid"] == "source_new"
-    assert client.sources.create_s3(
-        name="s3", bucket="bucket", region="us-west-2", role_arn="arn"
-    )["uuid"] == "source_new"
-    assert client.sources.create_google_drive(
-        name="drive", folder_ids=["folder"], include_shared_drives=True
-    )["uuid"] == "source_new"
+    assert client.sources.create_web(start_urls=["https://example.com"], max_depth=1)[
+        "uuid"
+    ] == "source_new"
+    assert client.sources.create_s3(bucket="bucket", role_arn="arn")["uuid"] == "source_new"
+    assert client.sources.create_google_drive(folder_ids=["folder"], include_shared_drives=True)[
+        "uuid"
+    ] == "source_new"
     assert client.sources.create_file_upload(name="upload")["uuid"] == "source_new"
 
     dataset = Dataset(client.datasets, {"id": "ds_1"})
@@ -406,7 +422,7 @@ def test_source_create_helpers_and_dataset_typed_ingest() -> None:
     ) == {"job_id": "job_new"}
 
     assert calls[0][2] == {
-        "name": "web",
+        "name": "web-example-com",
         "source_type": "web",
         "config": {
             "start_urls": ["https://example.com"],
@@ -415,7 +431,10 @@ def test_source_create_helpers_and_dataset_typed_ingest() -> None:
         },
     }
     assert calls[1][2]["source_type"] == "s3"
+    assert calls[1][2]["name"] == "s3-bucket"
+    assert calls[1][2]["config"]["region"] == "us-east-1"
     assert calls[2][2]["source_type"] == "gdrive"
+    assert calls[2][2]["name"] == "gdrive-folder"
     assert calls[3][2]["source_type"] == "file_upload"
     assert calls[-2][2]["source_type"] == "web"
     assert calls[-1] == (
@@ -458,7 +477,9 @@ def test_ingest_files_upload_flow(tmp_path: Path) -> None:
             uploaded["content_type"] = request.headers["content-type"]
             return httpx.Response(200)
         if request.url.path == "/v1/sources":
-            assert json.loads(request.content)["metadata"] == {"dataset_id": "ds_1"}
+            body = json.loads(request.content)
+            assert body["metadata"] == {"dataset_id": "ds_1"}
+            assert body["name"].startswith("file-upload-sample-")
             return json_response({"id": "source_1"})
         if request.url.path == "/v1/sources/source_1/upload/init":
             assert json.loads(request.content)["files"][0]["name"] == "sample.txt"
