@@ -105,6 +105,9 @@ dataset.insert(
 Embed text with the dataset's configured model and insert the resulting vectors:
 
 ```python
+dataset.add_texts("VectorAmp uses SABLE for high-performance vector search.")
+
+# Optional IDs and metadata are still supported for batches.
 dataset.add_texts(
     ["VectorAmp uses SABLE for high-performance vector search."],
     ids=["sable-note"],
@@ -117,17 +120,13 @@ dataset.add_texts(
 Search by text:
 
 ```python
-results = dataset.search(
-    text="How does SABLE work?",
-    top_k=10,
-    include_documents=True,
-)
+results = dataset.search("How does SABLE work?", top_k=10, include_documents=True)
 ```
 
 Search by vector:
 
 ```python
-results = dataset.search(vector=[0.1, 0.2, 0.3], top_k=5)
+results = dataset.search([0.1, 0.2, 0.3], top_k=5)
 ```
 
 Hybrid and filtered search:
@@ -160,7 +159,6 @@ from vectoramp import WebSource
 
 job = dataset.ingest_source(
     WebSource(
-        name="docs-site",
         start_urls=["https://docs.example.com/"],
         max_depth=1,
     )
@@ -178,26 +176,22 @@ source APIs, so existing `client.ingestion.create_source(...)` code still works:
 
 ```python
 web = client.sources.create_web(
-    name="docs-site",
     start_urls=["https://docs.example.com/"],
     max_depth=1,
 )
 
 s3 = client.sources.create_s3(
-    name="s3-docs",
     bucket="my-bucket",
-    region="us-east-1",
     prefix="documents/",
     role_arn="arn:aws:iam::123456789012:role/vectoramp-ingestion",
 )
 
 gdrive = client.sources.create_google_drive(
-    name="drive-docs",
     folder_ids=["drive-folder-id"],
     include_shared_drives=True,
 )
 
-upload_source = client.sources.create_file_upload(name="manual-upload")
+upload_source = client.sources.create_file_upload()
 ```
 
 The supported typed source classes are `WebSource`, `S3Source`,
@@ -227,14 +221,13 @@ source = client.ingestion.create_source(
 )
 ```
 
-Upload local files through the REST upload flow. The SDK creates a `file_upload` source, initializes presigned uploads, uploads bytes to the returned URLs, and completes the upload job:
+Upload local files through the REST upload flow. The SDK creates a `file_upload` source with a generated name when `source_name` is omitted, initializes presigned uploads, uploads bytes to the returned URLs, and completes the upload job:
 
 ```python
-job = dataset.ingest_files(
-    paths=["./docs/whitepaper.pdf", "./docs/overview.txt"],
-    source_name="product-docs-upload",
-)
+job = dataset.ingest_files(["./docs/whitepaper.pdf", "./docs/overview.txt"])
 ```
+
+Pass `source_name="product-docs-upload"` only when you want a specific source name.
 
 ## Intelligence / RAG
 
