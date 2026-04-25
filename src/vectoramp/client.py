@@ -34,6 +34,7 @@ class VectorAmp:
         )
         self.datasets = DatasetsResource(self.transport, client=self)
         self.ingestion = IngestionResource(self.transport)
+        self.sources = self.ingestion
         self.intelligence = IntelligenceResource(self.transport)
 
     def ask(

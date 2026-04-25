@@ -152,19 +152,78 @@ Start ingestion from an existing source:
 job = dataset.ingest_source("source-uuid")
 ```
 
+Or pass a typed source builder. The SDK creates the source, extracts its returned ID,
+and starts the ingestion job for the dataset:
+
+```python
+from vectoramp import WebSource
+
+job = dataset.ingest_source(
+    WebSource(
+        name="docs-site",
+        start_urls=["https://docs.example.com/"],
+        max_depth=1,
+    )
+)
+```
+
 List jobs with pagination:
 
 ```python
 jobs = client.ingestion.list_jobs(dataset_id=dataset_id, limit=50, offset=0)
 ```
 
-Create a source:
+Create sources with typed helpers. `client.sources` is an alias for the ingestion
+source APIs, so existing `client.ingestion.create_source(...)` code still works:
+
+```python
+web = client.sources.create_web(
+    name="docs-site",
+    start_urls=["https://docs.example.com/"],
+    max_depth=1,
+)
+
+s3 = client.sources.create_s3(
+    name="s3-docs",
+    bucket="my-bucket",
+    region="us-east-1",
+    prefix="documents/",
+    role_arn="arn:aws:iam::123456789012:role/vectoramp-ingestion",
+)
+
+gdrive = client.sources.create_google_drive(
+    name="drive-docs",
+    folder_ids=["drive-folder-id"],
+    include_shared_drives=True,
+)
+
+upload_source = client.sources.create_file_upload(name="manual-upload")
+```
+
+The supported typed source classes are `WebSource`, `S3Source`,
+`GoogleDriveSource` (`source_type="gdrive"`), and `FileUploadSource`
+(`source_type="file_upload"`). Use `GenericSource` as an escape hatch when the
+API supports a source type before the SDK has a dedicated class:
+
+```python
+from vectoramp import GenericSource
+
+source = client.sources.create(
+    GenericSource(
+        name="custom-source",
+        source_type="custom",
+        config={"any_api_field": "value"},
+    )
+)
+```
+
+The low-level create API is preserved:
 
 ```python
 source = client.ingestion.create_source(
     name="docs-site",
     source_type="web",
-    config={"start_urls": ["https://docs.example.com/"], "max_depth": 1, "type": "web"},
+    config={"start_urls": ["https://docs.example.com/"], "max_depth": 1},
 )
 ```
 

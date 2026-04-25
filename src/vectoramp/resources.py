@@ -8,6 +8,14 @@ from collections.abc import ItemsView, KeysView, ValuesView
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Optional, Sequence, Union
 
+from .sources import (
+    FileUploadSource,
+    GoogleDriveSource,
+    S3Source,
+    SourceBuilder,
+    SourceInput,
+    WebSource,
+)
 from .transport import BaseTransport, RestTransport
 from .types import JSON, AdvancedFilter, ConversationTurn, Filters, Metric, Vector
 
@@ -121,11 +129,12 @@ class Dataset:
             description=description,
         )
 
-    def ingest_source(self, source_id: str, *, pipeline_id: Optional[str] = None) -> JSON:
+    def ingest_source(self, source: SourceInput, *, pipeline_id: Optional[str] = None) -> JSON:
         if self.client is None:
             raise TypeError(
                 "Dataset.ingest_source requires a Dataset created by a VectorAmp client."
             )
+        source_id = self.client.sources.resolve_source_id(source)
         return self.client.ingestion.start_job(
             source_id=source_id,
             dataset_id=self.id,
@@ -339,23 +348,163 @@ class IngestionResource:
 
     def create_source(
         self,
+        source: Optional[SourceBuilder] = None,
         *,
-        name: str,
-        source_type: str,
-        config: Mapping[str, Any],
+        name: Optional[str] = None,
+        source_type: Optional[str] = None,
+        config: Optional[Mapping[str, Any]] = None,
         description: Optional[str] = None,
         metadata: Optional[Mapping[str, Any]] = None,
     ) -> JSON:
-        body: JSON = {
-            "name": name,
-            "source_type": source_type,
-            "config": dict(config),
-        }
-        if description is not None:
-            body["description"] = description
-        if metadata is not None:
-            body["metadata"] = dict(metadata)
+        if source is not None:
+            body = source.to_create_request()
+        else:
+            if name is None or source_type is None or config is None:
+                raise TypeError("create_source requires source or name, source_type, and config.")
+            body = {
+                "name": name,
+                "source_type": source_type,
+                "config": dict(config),
+            }
+            if description is not None:
+                body["description"] = description
+            if metadata is not None:
+                body["metadata"] = dict(metadata)
         return self._transport.request("POST", "/v1/sources", json_body=body)
+
+    def create(self, source: SourceBuilder) -> JSON:
+        return self.create_source(source)
+
+    def create_web(
+        self,
+        *,
+        name: str,
+        start_urls: Sequence[str],
+        max_depth: Optional[int] = None,
+        max_pages: Optional[int] = None,
+        allowed_domains: Optional[Sequence[str]] = None,
+        include_patterns: Optional[Sequence[str]] = None,
+        exclude_patterns: Optional[Sequence[str]] = None,
+        crawl_delay_seconds: Optional[float] = None,
+        description: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+        config_extra: Optional[Mapping[str, Any]] = None,
+    ) -> JSON:
+        return self.create_source(
+            WebSource(
+                name=name,
+                start_urls=start_urls,
+                max_depth=max_depth,
+                max_pages=max_pages,
+                allowed_domains=allowed_domains,
+                include_patterns=include_patterns,
+                exclude_patterns=exclude_patterns,
+                crawl_delay_seconds=crawl_delay_seconds,
+                description=description,
+                metadata=metadata,
+                config_extra=config_extra,
+            )
+        )
+
+    def create_s3(
+        self,
+        *,
+        name: str,
+        bucket: str,
+        region: str,
+        prefix: Optional[str] = None,
+        sync_mode: str = "full",
+        access_key_id: Optional[str] = None,
+        secret_access_key: Optional[str] = None,
+        role_arn: Optional[str] = None,
+        endpoint_url: Optional[str] = None,
+        file_patterns: Optional[Sequence[str]] = None,
+        max_file_size_mb: Optional[int] = None,
+        description: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+        config_extra: Optional[Mapping[str, Any]] = None,
+    ) -> JSON:
+        return self.create_source(
+            S3Source(
+                name=name,
+                bucket=bucket,
+                region=region,
+                prefix=prefix,
+                sync_mode=sync_mode,
+                access_key_id=access_key_id,
+                secret_access_key=secret_access_key,
+                role_arn=role_arn,
+                endpoint_url=endpoint_url,
+                file_patterns=file_patterns,
+                max_file_size_mb=max_file_size_mb,
+                description=description,
+                metadata=metadata,
+                config_extra=config_extra,
+            )
+        )
+
+    def create_google_drive(
+        self,
+        *,
+        name: str,
+        folder_ids: Optional[Sequence[str]] = None,
+        file_ids: Optional[Sequence[str]] = None,
+        auth_mode: str = "oauth",
+        oauth_credentials: Optional[Mapping[str, Any]] = None,
+        include_shared_drives: Optional[bool] = None,
+        sync_mode: str = "full",
+        service_account_json: Optional[Mapping[str, Any]] = None,
+        credentials_json: Optional[Mapping[str, Any]] = None,
+        description: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+        config_extra: Optional[Mapping[str, Any]] = None,
+    ) -> JSON:
+        return self.create_source(
+            GoogleDriveSource(
+                name=name,
+                folder_ids=folder_ids,
+                file_ids=file_ids,
+                auth_mode=auth_mode,
+                oauth_credentials=oauth_credentials,
+                include_shared_drives=include_shared_drives,
+                sync_mode=sync_mode,
+                service_account_json=service_account_json,
+                credentials_json=credentials_json,
+                description=description,
+                metadata=metadata,
+                config_extra=config_extra,
+            )
+        )
+
+    def create_file_upload(
+        self,
+        *,
+        name: str = "vectoramp-python-upload",
+        storage_provider: str = "s3",
+        sync_mode: str = "full",
+        description: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+        config_extra: Optional[Mapping[str, Any]] = None,
+    ) -> JSON:
+        return self.create_source(
+            FileUploadSource(
+                name=name,
+                storage_provider=storage_provider,
+                sync_mode=sync_mode,
+                description=description,
+                metadata=metadata,
+                config_extra=config_extra,
+            )
+        )
+
+    def resolve_source_id(self, source: SourceInput) -> str:
+        if isinstance(source, str):
+            return source
+        created = self.create_source(source)
+        source_id = created.get("id") or created.get("source_id") or created.get("uuid")
+        if source_id is None:
+            raise ValueError("Source creation response did not include id or source_id.")
+        return str(source_id)
 
     def start_job(
         self, *, source_id: str, dataset_id: str, pipeline_id: Optional[str] = None
