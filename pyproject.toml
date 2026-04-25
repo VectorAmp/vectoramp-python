@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vectoramp"
+version = "0.1.0"
+description = "Python SDK for the VectorAmp API"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "VectorAmp" }]
+keywords = ["vectoramp", "vector database", "rag", "sable"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Typing :: Typed",
+]
+dependencies = ["httpx>=0.25,<1"]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4",
+  "pytest-cov>=4.1",
+  "ruff>=0.5",
+  "mypy>=1.8",
+]
+
+[project.urls]
+Homepage = "https://vectoramp.com"
+Documentation = "https://docs.vectoramp.com"
+Repository = "https://gitlab.com/VectorAmp/SDK/Python"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vectoramp"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=vectoramp --cov-report=term-missing --cov-fail-under=90"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_unused_configs = true
+packages = ["vectoramp"]
