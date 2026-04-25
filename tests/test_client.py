@@ -7,7 +7,17 @@ from typing import Any
 import httpx
 import pytest
 
-from vectoramp import APIError, AuthenticationError, Dataset, VectorAmp
+from vectoramp import (
+    APIError,
+    AuthenticationError,
+    Dataset,
+    FileUploadSource,
+    GenericSource,
+    GoogleDriveSource,
+    S3Source,
+    VectorAmp,
+    WebSource,
+)
 
 
 def make_client(handler):
@@ -305,6 +315,114 @@ def test_api_error_decodes_message() -> None:
         client.datasets.get("missing")
     assert exc.value.status_code == 400
     assert "bad news" in str(exc.value)
+
+
+def test_typed_source_builders_use_ingestion_field_names() -> None:
+    assert WebSource(
+        name="docs",
+        start_urls=["https://docs.example.com"],
+        max_depth=2,
+        max_pages=50,
+        allowed_domains=["docs.example.com"],
+        metadata={"dataset_id": "ds_1"},
+    ).to_create_request() == {
+        "name": "docs",
+        "source_type": "web",
+        "config": {
+            "start_urls": ["https://docs.example.com"],
+            "sync_mode": "full",
+            "max_depth": 2,
+            "max_pages": 50,
+            "allowed_domains": ["docs.example.com"],
+        },
+        "metadata": {"dataset_id": "ds_1"},
+    }
+    assert S3Source(
+        name="bucket",
+        bucket="docs-bucket",
+        region="us-east-1",
+        prefix="docs/",
+        file_patterns=["*.pdf"],
+        max_file_size_mb=100,
+    ).to_create_request()["source_type"] == "s3"
+    assert GoogleDriveSource(
+        name="drive",
+        folder_ids=["folder_1"],
+        oauth_credentials={"token": "secret"},
+        include_shared_drives=True,
+    ).to_create_request() == {
+        "name": "drive",
+        "source_type": "gdrive",
+        "config": {
+            "auth_mode": "oauth",
+            "sync_mode": "full",
+            "folder_ids": ["folder_1"],
+            "include_shared_drives": True,
+            "oauth_credentials": {"token": "secret"},
+        },
+    }
+    assert FileUploadSource(name="upload").to_create_request() == {
+        "name": "upload",
+        "source_type": "file_upload",
+        "config": {"storage_provider": "s3", "sync_mode": "full"},
+    }
+    assert GenericSource(
+        name="custom", source_type="future", config={"field": "value"}
+    ).to_create_request() == {
+        "name": "custom",
+        "source_type": "future",
+        "config": {"field": "value"},
+    }
+
+
+def test_source_create_helpers_and_dataset_typed_ingest() -> None:
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content) if request.content else None
+        calls.append((request.method, request.url.path, body))
+        if request.url.path == "/v1/sources":
+            return json_response({"uuid": "source_new"})
+        if request.url.path == "/ingestion/jobs":
+            return json_response({"job_id": "job_new"})
+        raise AssertionError(str(request.url))
+
+    client = make_client(handler)
+    assert client.sources is client.ingestion
+    assert client.sources.create_web(
+        name="web", start_urls=["https://example.com"], max_depth=1
+    )["uuid"] == "source_new"
+    assert client.sources.create_s3(
+        name="s3", bucket="bucket", region="us-west-2", role_arn="arn"
+    )["uuid"] == "source_new"
+    assert client.sources.create_google_drive(
+        name="drive", folder_ids=["folder"], include_shared_drives=True
+    )["uuid"] == "source_new"
+    assert client.sources.create_file_upload(name="upload")["uuid"] == "source_new"
+
+    dataset = Dataset(client.datasets, {"id": "ds_1"})
+    assert dataset.ingest_source(
+        WebSource(name="docs", start_urls=["https://docs.example.com"]), pipeline_id="pipe_1"
+    ) == {"job_id": "job_new"}
+
+    assert calls[0][2] == {
+        "name": "web",
+        "source_type": "web",
+        "config": {
+            "start_urls": ["https://example.com"],
+            "sync_mode": "full",
+            "max_depth": 1,
+        },
+    }
+    assert calls[1][2]["source_type"] == "s3"
+    assert calls[2][2]["source_type"] == "gdrive"
+    assert calls[3][2]["source_type"] == "file_upload"
+    assert calls[-2][2]["source_type"] == "web"
+    assert calls[-1] == (
+        "POST",
+        "/ingestion/jobs",
+        {"source_id": "source_new", "dataset_id": "ds_1", "pipeline_id": "pipe_1"},
+    )
 
 
 def test_ingestion_sources_and_jobs() -> None:
