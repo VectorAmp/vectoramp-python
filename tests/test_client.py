@@ -151,7 +151,14 @@ def test_dataset_documents_list_and_download() -> None:
             request.method == "GET"
             and request.url.path == "/datasets/ds_1/documents/doc_1/download"
         ):
-            return httpx.Response(200, content=b"hello", headers={"content-type": "text/markdown"})
+            return httpx.Response(
+                307,
+                headers={"location": "https://download.test/doc_1"},
+            )
+        if request.method == "GET" and str(request.url) == "https://download.test/doc_1":
+            return httpx.Response(
+                200, content=b"hello", headers={"content-type": "text/markdown"}
+            )
         return json_response({"detail": "unexpected"}, 404)
 
     client = make_client(handler)

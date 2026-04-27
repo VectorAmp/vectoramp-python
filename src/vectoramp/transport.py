@@ -132,6 +132,7 @@ class RestTransport(BaseTransport):
             self._url(path),
             params=self._clean(params),
             headers=self._headers(headers),
+            follow_redirects=True,
         )
         self._raise_for_status(response)
         return response.content
