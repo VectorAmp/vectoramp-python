@@ -140,6 +140,30 @@ def test_search_text_payload() -> None:
     }
 
 
+def test_dataset_documents_list_and_download() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and request.url.path == "/datasets/ds_1/documents":
+            assert dict(request.url.params) == {"limit": "10", "cursor": "doc_0", "status": "ready"}
+            return json_response(
+                {"documents": [{"id": "doc_1", "file_name": "a.md"}], "next_cursor": None}
+            )
+        if (
+            request.method == "GET"
+            and request.url.path == "/datasets/ds_1/documents/doc_1/download"
+        ):
+            return httpx.Response(200, content=b"hello", headers={"content-type": "text/markdown"})
+        return json_response({"detail": "unexpected"}, 404)
+
+    client = make_client(handler)
+    page = client.datasets.list_documents("ds_1", limit=10, cursor="doc_0", status="ready")
+    assert page["documents"][0]["id"] == "doc_1"
+    assert client.datasets.download_document("ds_1", "doc_1") == b"hello"
+
+    dataset = Dataset(client.datasets, {"id": "ds_1"})
+    assert dataset.list_documents(limit=10, cursor="doc_0", status="ready")["next_cursor"] is None
+    assert dataset.download_document("doc_1") == b"hello"
+
+
 def test_dataset_resource_instance_methods_delegate_to_services(tmp_path: Path) -> None:
     sample = tmp_path / "sample.txt"
     sample.write_text("hello")

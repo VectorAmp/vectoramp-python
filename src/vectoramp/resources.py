@@ -149,6 +149,36 @@ class Dataset:
         """Delete this dataset and return the API response."""
         return self.service.delete(self.id)
 
+    def list_documents(
+        self,
+        *,
+        limit: int = 50,
+        cursor: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> JSON:
+        """List source documents retained for this dataset.
+
+        Args:
+            limit: Maximum documents to return. Defaults to ``50``.
+            cursor: Cursor from a previous page's ``next_cursor``.
+            status: Optional document status filter.
+
+        Returns:
+            Document page JSON from ``/datasets/{id}/documents``.
+        """
+        return self.service.list_documents(self.id, limit=limit, cursor=cursor, status=status)
+
+    def download_document(self, document_id: str) -> bytes:
+        """Download a retained source document as raw bytes.
+
+        Args:
+            document_id: Source document identifier from :meth:`list_documents`.
+
+        Returns:
+            Raw document bytes.
+        """
+        return self.service.download_document(self.id, document_id)
+
     def ask(
         self,
         query: str,
@@ -371,6 +401,45 @@ class DatasetsResource:
             Stats response JSON.
         """
         return self._transport.request("GET", f"/datasets/{dataset_id}/stats")
+
+    def list_documents(
+        self,
+        dataset_id: str,
+        *,
+        limit: int = 50,
+        cursor: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> JSON:
+        """List source documents retained for a dataset.
+
+        Args:
+            dataset_id: Dataset identifier.
+            limit: Maximum documents to return. Defaults to ``50``.
+            cursor: Cursor from a previous page's ``next_cursor``.
+            status: Optional document status filter.
+
+        Returns:
+            Document page JSON from ``/datasets/{dataset_id}/documents``.
+        """
+        return self._transport.request(
+            "GET",
+            f"/datasets/{dataset_id}/documents",
+            params={"limit": limit, "cursor": cursor, "status": status},
+        )
+
+    def download_document(self, dataset_id: str, document_id: str) -> bytes:
+        """Download a retained source document as raw bytes.
+
+        Args:
+            dataset_id: Dataset identifier.
+            document_id: Source document identifier from :meth:`list_documents`.
+
+        Returns:
+            Raw document bytes.
+        """
+        return self._transport.download(
+            "GET", f"/datasets/{dataset_id}/documents/{document_id}/download"
+        )
 
     def search(
         self,
