@@ -42,6 +42,17 @@ class BaseTransport(ABC):
     ) -> Iterator[Dict[str, Any]]:
         """Yield JSON-decoded Server-Sent Event data chunks."""
 
+    def download(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Optional[Mapping[str, Any]] = None,
+        headers: Optional[Mapping[str, str]] = None,
+    ) -> bytes:
+        """Send one request and return raw response bytes."""
+        raise NotImplementedError("transport does not support raw downloads")
+
     @abstractmethod
     def close(self) -> None:
         """Release transport resources."""
@@ -106,6 +117,24 @@ class RestTransport(BaseTransport):
                     if payload == "[DONE]":
                         break
                     yield json.loads(payload)
+
+    def download(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Optional[Mapping[str, Any]] = None,
+        headers: Optional[Mapping[str, str]] = None,
+    ) -> bytes:
+        """Send one request and return raw response bytes."""
+        response = self.client.request(
+            method,
+            self._url(path),
+            params=self._clean(params),
+            headers=self._headers(headers),
+        )
+        self._raise_for_status(response)
+        return response.content
 
     def put_url(
         self,

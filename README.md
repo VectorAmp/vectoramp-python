@@ -260,3 +260,21 @@ pytest
 ```
 
 GitLab CI runs Ruff, mypy, and pytest with coverage.
+
+## Dataset documents
+
+Datasets expose retained source documents when ingestion stored originals:
+
+```python
+page = client.datasets.list_documents("dataset_id", limit=50, cursor=None, status="ready")
+for document in page.get("documents", []):
+    print(document["id"], document.get("file_name"))
+
+content = client.datasets.download_document("dataset_id", "document_id")
+open("document.bin", "wb").write(content)
+
+# Resource-style calls work too:
+dataset = client.datasets.get("dataset_id")
+dataset.list_documents()
+dataset.download_document("document_id")
+```
