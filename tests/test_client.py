@@ -144,13 +144,19 @@ def test_dataset_documents_list_and_download() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "GET" and request.url.path == "/datasets/ds_1/documents":
             assert dict(request.url.params) == {"limit": "10", "cursor": "doc_0", "status": "ready"}
-            return json_response({"documents": [{"id": "doc_1", "file_name": "a.md"}], "next_cursor": None})
-        if request.method == "GET" and request.url.path == "/datasets/ds_1/documents/doc_1/download":
+            return json_response(
+                {"documents": [{"id": "doc_1", "file_name": "a.md"}], "next_cursor": None}
+            )
+        if (
+            request.method == "GET"
+            and request.url.path == "/datasets/ds_1/documents/doc_1/download"
+        ):
             return httpx.Response(200, content=b"hello", headers={"content-type": "text/markdown"})
         return json_response({"detail": "unexpected"}, 404)
 
     client = make_client(handler)
-    assert client.datasets.list_documents("ds_1", limit=10, cursor="doc_0", status="ready")["documents"][0]["id"] == "doc_1"
+    page = client.datasets.list_documents("ds_1", limit=10, cursor="doc_0", status="ready")
+    assert page["documents"][0]["id"] == "doc_1"
     assert client.datasets.download_document("ds_1", "doc_1") == b"hello"
 
     dataset = Dataset(client.datasets, {"id": "ds_1"})
