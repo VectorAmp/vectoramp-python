@@ -344,7 +344,7 @@ class DatasetsResource:
         dim: int,
         metric: Metric = "cosine",
         embedding_provider: str = "vectoramp",
-        embedding_model: str = "Qwen/Qwen3-Embedding-4B",
+        embedding_model: str = "VectorAmp-Embedding-2560",
         filters: Optional[Mapping[str, Any]] = None,
         metadata_schema: Optional[Mapping[str, Any]] = None,
         tuning: Optional[Mapping[str, Any]] = None,
@@ -360,7 +360,7 @@ class DatasetsResource:
             metric: Distance metric. Defaults to ``"cosine"``.
             embedding_provider: Embedding provider. Defaults to ``"vectoramp"``.
             embedding_model: Embedding model. Defaults to
-                ``"Qwen/Qwen3-Embedding-4B"``.
+                ``"VectorAmp-Embedding-2560"``.
             filters: Optional filter schema/configuration.
             metadata_schema: Optional metadata schema.
             tuning: Optional SABLE tuning parameters.

@@ -55,7 +55,7 @@ dataset = client.datasets.create(
     dim=2560,
     metric="cosine",
     embedding_provider="vectoramp",
-    embedding_model="Qwen/Qwen3-Embedding-4B",
+    embedding_model="VectorAmp-Embedding-2560",
 )
 
 dataset_id = dataset.id  # also available as dataset["id"] for compatibility

@@ -58,7 +58,7 @@ def test_dataset_create_forces_sable_and_auth_header() -> None:
     assert seen["body"]["index_type"] == "sable"
     assert seen["body"]["embedding"] == {
         "provider": "vectoramp",
-        "model": "Qwen/Qwen3-Embedding-4B",
+        "model": "VectorAmp-Embedding-2560",
     }
     assert seen["body"]["filters"] == {"category": "string"}
     assert seen["body"]["metadata_schema"] == {"title": {"type": "string"}}
