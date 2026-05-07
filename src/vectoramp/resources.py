@@ -43,6 +43,7 @@ class Dataset:
         *,
         vector: Optional[Sequence[float]] = None,
         text: Optional[str] = None,
+        search_text: Optional[str] = None,
         top_k: int = 10,
         filters: Optional[Filters] = None,
         advanced_filters: Optional[Sequence[AdvancedFilter]] = None,
@@ -66,6 +67,7 @@ class Dataset:
                 ``text``.
             text: Explicit text query. Mutually exclusive with ``query`` and
                 ``vector``.
+            search_text: Alias for ``text`` for single-field hybrid/BM25 UX.
             top_k: Maximum matches to return. Defaults to ``10``.
             filters: Exact-match metadata filters.
             advanced_filters: API-native advanced metadata filters.
@@ -89,6 +91,7 @@ class Dataset:
             query,
             vector=vector,
             text=text,
+            search_text=search_text,
             top_k=top_k,
             filters=filters,
             advanced_filters=advanced_filters,
@@ -448,6 +451,7 @@ class DatasetsResource:
         *,
         vector: Optional[Sequence[float]] = None,
         text: Optional[str] = None,
+        search_text: Optional[str] = None,
         top_k: int = 10,
         filters: Optional[Filters] = None,
         advanced_filters: Optional[Sequence[AdvancedFilter]] = None,
@@ -472,6 +476,7 @@ class DatasetsResource:
                 ``text``.
             text: Explicit text query. Mutually exclusive with ``query`` and
                 ``vector``.
+            search_text: Alias for ``text`` for single-field hybrid/BM25 UX.
             top_k: Maximum matches to return. Defaults to ``10``.
             filters: Exact-match metadata filters.
             advanced_filters: API-native advanced metadata filters.
@@ -490,15 +495,19 @@ class DatasetsResource:
         Returns:
             Search response JSON.
         """
+        if search_text is not None:
+            if text is not None:
+                raise ValueError("Provide text or search_text, not both.")
+            text = search_text
         if query is not None:
             if vector is not None or text is not None:
-                raise ValueError("Provide query or vector/text, not both.")
+                raise ValueError("Provide query or vector/text/search_text, not both.")
             if isinstance(query, str):
                 text = query
             else:
                 vector = query
         if (vector is None) == (text is None):
-            raise ValueError("Provide exactly one of vector or text.")
+            raise ValueError("Provide exactly one of vector or text/search_text.")
         body: JSON = {"top_k": top_k}
         if vector is not None:
             body["query"] = list(vector)

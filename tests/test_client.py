@@ -140,6 +140,18 @@ def test_search_text_payload() -> None:
     }
 
 
+def test_search_text_alias_payload() -> None:
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return json_response({"results": []})
+
+    client = make_client(handler)
+    client.datasets.search("ds_1", search_text="hybrid query", top_k=3)
+    assert seen["body"] == {"top_k": 3, "query_text": "hybrid query"}
+
+
 def test_dataset_documents_list_and_download() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "GET" and request.url.path == "/datasets/ds_1/documents":
