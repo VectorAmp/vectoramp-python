@@ -10,10 +10,12 @@ from typing import Any, Iterator, Mapping, Optional, Sequence, Union
 
 from .sources import (
     FileUploadSource,
+    GCSSource,
     GoogleDriveSource,
     S3Source,
     SourceBuilder,
     SourceInput,
+    JiraSource,
     WebSource,
 )
 from .transport import BaseTransport, RestTransport
@@ -700,6 +702,8 @@ class IngestionResource:
         include_patterns: Optional[Sequence[str]] = None,
         exclude_patterns: Optional[Sequence[str]] = None,
         crawl_delay_seconds: Optional[float] = None,
+        include_assets: Optional[bool] = None,
+        max_assets_per_page: Optional[int] = None,
         description: Optional[str] = None,
         metadata: Optional[Mapping[str, Any]] = None,
         config_extra: Optional[Mapping[str, Any]] = None,
@@ -722,6 +726,8 @@ class IngestionResource:
                 include_patterns=include_patterns,
                 exclude_patterns=exclude_patterns,
                 crawl_delay_seconds=crawl_delay_seconds,
+                include_assets=include_assets,
+                max_assets_per_page=max_assets_per_page,
                 description=description,
                 metadata=metadata,
                 config_extra=config_extra,
@@ -771,6 +777,54 @@ class IngestionResource:
                 description=description,
                 metadata=metadata,
                 config_extra=config_extra,
+            )
+        )
+
+    def create_gcs(
+        self,
+        *,
+        bucket: str,
+        name: Optional[str] = None,
+        prefix: Optional[str] = None,
+        project_id: Optional[str] = None,
+        credentials_json: Optional[Mapping[str, Any]] = None,
+        sync_mode: str = "full",
+        file_patterns: Optional[Sequence[str]] = None,
+        max_file_size_mb: Optional[int] = None,
+        description: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+        config_extra: Optional[Mapping[str, Any]] = None,
+    ) -> JSON:
+        """Create a Google Cloud Storage source."""
+        return self.create_source(
+            GCSSource(
+                name=name, bucket=bucket, prefix=prefix, project_id=project_id,
+                credentials_json=credentials_json, sync_mode=sync_mode, file_patterns=file_patterns,
+                max_file_size_mb=max_file_size_mb, description=description, metadata=metadata,
+                config_extra=config_extra,
+            )
+        )
+
+    def create_jira(
+        self,
+        *,
+        cloud_id: str,
+        name: Optional[str] = None,
+        access_token: Optional[str] = None,
+        project_keys: Optional[Sequence[str]] = None,
+        jql: Optional[str] = None,
+        include_comments: bool = True,
+        sync_mode: str = "full",
+        description: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+        config_extra: Optional[Mapping[str, Any]] = None,
+    ) -> JSON:
+        """Create a Jira source. ``include_comments`` defaults to true."""
+        return self.create_source(
+            JiraSource(
+                name=name, cloud_id=cloud_id, access_token=access_token, project_keys=project_keys,
+                jql=jql, include_comments=include_comments, sync_mode=sync_mode,
+                description=description, metadata=metadata, config_extra=config_extra,
             )
         )
 

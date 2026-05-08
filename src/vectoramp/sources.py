@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 from .types import JSON
 
-KnownSourceType = Literal["s3", "web", "gdrive", "file_upload"]
+KnownSourceType = Literal["s3", "web", "gcs", "gdrive", "file_upload", "jira"]
 
 
 @runtime_checkable
@@ -77,6 +77,8 @@ class WebSource:
     include_patterns: Optional[Sequence[str]] = None
     exclude_patterns: Optional[Sequence[str]] = None
     crawl_delay_seconds: Optional[float] = None
+    include_assets: Optional[bool] = None
+    max_assets_per_page: Optional[int] = None
     sync_mode: str = "full"
     description: Optional[str] = None
     metadata: Optional[Mapping[str, Any]] = None
@@ -93,6 +95,8 @@ class WebSource:
         _set_optional_sequence(config, "include_patterns", self.include_patterns)
         _set_optional_sequence(config, "exclude_patterns", self.exclude_patterns)
         _set_optional(config, "crawl_delay_seconds", self.crawl_delay_seconds)
+        _set_optional(config, "include_assets", self.include_assets)
+        _set_optional(config, "max_assets_per_page", self.max_assets_per_page)
         _merge_extra(config, self.config_extra)
         return _source_body(
             name=self.name or _default_web_source_name(self.start_urls),
@@ -155,6 +159,42 @@ class S3Source:
         return _source_body(
             name=self.name or _default_source_name("s3", self.bucket),
             source_type="s3",
+            config=config,
+            description=self.description,
+            metadata=self.metadata,
+        )
+
+
+@dataclass(frozen=True)
+class GCSSource:
+    """Google Cloud Storage ingestion source."""
+
+    name: Optional[str] = None
+    bucket: str = ""
+    prefix: Optional[str] = None
+    project_id: Optional[str] = None
+    credentials_json: Optional[Mapping[str, Any]] = None
+    sync_mode: str = "full"
+    file_patterns: Optional[Sequence[str]] = None
+    max_file_size_mb: Optional[int] = None
+    description: Optional[str] = None
+    metadata: Optional[Mapping[str, Any]] = None
+    config_extra: Optional[Mapping[str, Any]] = None
+
+    def to_create_request(self) -> JSON:
+        if not self.bucket:
+            raise ValueError("GCSSource requires bucket.")
+        config: JSON = {"bucket": self.bucket, "sync_mode": self.sync_mode}
+        _set_optional(config, "prefix", self.prefix)
+        _set_optional(config, "project_id", self.project_id)
+        if self.credentials_json is not None:
+            config["credentials_json"] = dict(self.credentials_json)
+        _set_optional_sequence(config, "file_patterns", self.file_patterns)
+        _set_optional(config, "max_file_size_mb", self.max_file_size_mb)
+        _merge_extra(config, self.config_extra)
+        return _source_body(
+            name=self.name or _default_source_name("gcs", self.bucket),
+            source_type="gcs",
             config=config,
             description=self.description,
             metadata=self.metadata,
@@ -256,7 +296,40 @@ class FileUploadSource:
         )
 
 
-TypedSource = Union[GenericSource, WebSource, S3Source, GoogleDriveSource, FileUploadSource]
+@dataclass(frozen=True)
+class JiraSource:
+    """Jira ingestion source. ``include_comments`` defaults to true."""
+
+    name: Optional[str] = None
+    cloud_id: str = ""
+    access_token: Optional[str] = None
+    project_keys: Optional[Sequence[str]] = None
+    jql: Optional[str] = None
+    include_comments: bool = True
+    sync_mode: str = "full"
+    description: Optional[str] = None
+    metadata: Optional[Mapping[str, Any]] = None
+    config_extra: Optional[Mapping[str, Any]] = None
+
+    def to_create_request(self) -> JSON:
+        if not self.cloud_id:
+            raise ValueError("JiraSource requires cloud_id.")
+        config: JSON = {"cloud_id": self.cloud_id, "include_comments": self.include_comments, "sync_mode": self.sync_mode}
+        _set_optional(config, "access_token", self.access_token)
+        _set_optional_sequence(config, "project_keys", self.project_keys)
+        _set_optional(config, "jql", self.jql)
+        _merge_extra(config, self.config_extra)
+        hint = self.project_keys[0] if self.project_keys else self.cloud_id
+        return _source_body(
+            name=self.name or _default_source_name("jira", hint),
+            source_type="jira",
+            config=config,
+            description=self.description,
+            metadata=self.metadata,
+        )
+
+
+TypedSource = Union[GenericSource, WebSource, S3Source, GCSSource, GoogleDriveSource, FileUploadSource, JiraSource]
 SourceInput = Union[str, TypedSource]
 
 

@@ -178,6 +178,8 @@ source APIs, so existing `client.ingestion.create_source(...)` code still works:
 web = client.sources.create_web(
     start_urls=["https://docs.example.com/"],
     max_depth=1,
+    include_assets=True,
+    max_assets_per_page=5,
 )
 
 s3 = client.sources.create_s3(
@@ -185,6 +187,15 @@ s3 = client.sources.create_s3(
     prefix="documents/",
     role_arn="arn:aws:iam::123456789012:role/vectoramp-ingestion",
 )
+
+gcs = client.sources.create_gcs(bucket="my-gcs-bucket", prefix="documents/")
+
+jira = client.sources.create_jira(
+    cloud_id="atlassian-cloud-id",
+    project_keys=["ENG"],
+    include_comments=True,  # default
+)
+
 
 gdrive = client.sources.create_google_drive(
     folder_ids=["drive-folder-id"],
@@ -194,10 +205,11 @@ gdrive = client.sources.create_google_drive(
 upload_source = client.sources.create_file_upload()
 ```
 
-The supported typed source classes are `WebSource`, `S3Source`,
-`GoogleDriveSource` (`source_type="gdrive"`), and `FileUploadSource`
-(`source_type="file_upload"`). Use `GenericSource` as an escape hatch when the
-API supports a source type before the SDK has a dedicated class:
+The supported typed source classes are `WebSource`, `S3Source`, `GCSSource`,
+`GoogleDriveSource` (`source_type="gdrive"`), `JiraSource`, and
+`FileUploadSource` (`source_type="file_upload"`). Use `GenericSource` as an
+escape hatch when the API supports a source type before the SDK has a dedicated
+class:
 
 ```python
 from vectoramp import GenericSource
