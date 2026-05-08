@@ -170,9 +170,7 @@ def test_dataset_documents_list_and_download() -> None:
                 headers={"location": "https://download.test/doc_1"},
             )
         if request.method == "GET" and str(request.url) == "https://download.test/doc_1":
-            return httpx.Response(
-                200, content=b"hello", headers={"content-type": "text/markdown"}
-            )
+            return httpx.Response(200, content=b"hello", headers={"content-type": "text/markdown"})
         return json_response({"detail": "unexpected"}, 404)
 
     client = make_client(handler)
@@ -233,9 +231,9 @@ def test_dataset_resource_instance_methods_delegate_to_services(tmp_path: Path) 
     assert dataset.client is client
     assert dataset.search(text="hello", top_k=2) == {"results": []}
     assert dataset.insert([{"id": "v1", "values": [0.1], "metadata": {}}]) == {"inserted": 1}
-    assert dataset.insert_vectors(
-        [{"id": "v2", "values": [0.2], "metadata": {}}]
-    ) == {"inserted": 1}
+    assert dataset.insert_vectors([{"id": "v2", "values": [0.2], "metadata": {}}]) == {
+        "inserted": 1
+    }
     assert dataset.add_texts(["hello"], ids=["text_1"])["inserted"] == 1
     assert dataset.ask("question?")["answer"] == "yes"
     assert dataset.ingest_source("source_1", pipeline_id="pipe_1")["job_id"] == "job_1"
@@ -243,13 +241,17 @@ def test_dataset_resource_instance_methods_delegate_to_services(tmp_path: Path) 
     assert dataset.delete() is None
 
     assert ("POST", "/datasets/ds_1/search", {"top_k": 2, "query_text": "hello"}) in calls
-    assert ("POST", "/intelligence/query", {
-        "query": "question?",
-        "top_k": 5,
-        "stream": False,
-        "include_sources": True,
-        "dataset_id": "ds_1",
-    }) in calls
+    assert (
+        "POST",
+        "/intelligence/query",
+        {
+            "query": "question?",
+            "top_k": 5,
+            "stream": False,
+            "include_sources": True,
+            "dataset_id": "ds_1",
+        },
+    ) in calls
 
 
 def test_insert_vectors_and_add_texts() -> None:
@@ -393,17 +395,21 @@ def test_typed_source_builders_use_ingestion_field_names() -> None:
         },
         "metadata": {"dataset_id": "ds_1"},
     }
-    assert S3Source(
-        name="bucket",
-        bucket="docs-bucket",
-        region="us-east-1",
-        prefix="docs/",
-        file_patterns=["*.pdf"],
-        max_file_size_mb=100,
-    ).to_create_request()["source_type"] == "s3"
-    assert WebSource(start_urls=["https://docs.example.com/path"]).to_create_request()[
-        "name"
-    ] == "web-docs-example-com"
+    assert (
+        S3Source(
+            name="bucket",
+            bucket="docs-bucket",
+            region="us-east-1",
+            prefix="docs/",
+            file_patterns=["*.pdf"],
+            max_file_size_mb=100,
+        ).to_create_request()["source_type"]
+        == "s3"
+    )
+    assert (
+        WebSource(start_urls=["https://docs.example.com/path"]).to_create_request()["name"]
+        == "web-docs-example-com"
+    )
     assert S3Source(bucket="docs-bucket").to_create_request() == {
         "name": "s3-docs-bucket",
         "source_type": "s3",
@@ -433,7 +439,12 @@ def test_typed_source_builders_use_ingestion_field_names() -> None:
     assert JiraSource(cloud_id="cloud_1", project_keys=["ENG"]).to_create_request() == {
         "name": "jira-eng",
         "source_type": "jira",
-        "config": {"cloud_id": "cloud_1", "include_comments": True, "sync_mode": "full", "project_keys": ["ENG"]},
+        "config": {
+            "cloud_id": "cloud_1",
+            "include_comments": True,
+            "sync_mode": "full",
+            "project_keys": ["ENG"],
+        },
     }
     assert FileUploadSource(name="upload").to_create_request() == {
         "name": "upload",
@@ -447,9 +458,10 @@ def test_typed_source_builders_use_ingestion_field_names() -> None:
         "source_type": "future",
         "config": {"field": "value"},
     }
-    assert GenericSource(source_type="future", config={"field": "value"}).to_create_request()[
-        "name"
-    ] == "future"
+    assert (
+        GenericSource(source_type="future", config={"field": "value"}).to_create_request()["name"]
+        == "future"
+    )
 
 
 def test_source_create_helpers_and_dataset_typed_ingest() -> None:
@@ -466,15 +478,21 @@ def test_source_create_helpers_and_dataset_typed_ingest() -> None:
 
     client = make_client(handler)
     assert client.sources is client.ingestion
-    assert client.sources.create_web(start_urls=["https://example.com"], max_depth=1)[
-        "uuid"
-    ] == "source_new"
+    assert (
+        client.sources.create_web(start_urls=["https://example.com"], max_depth=1)["uuid"]
+        == "source_new"
+    )
     assert client.sources.create_s3(bucket="bucket", role_arn="arn")["uuid"] == "source_new"
     assert client.sources.create_gcs(bucket="gcs-bucket", prefix="docs/")["uuid"] == "source_new"
-    assert client.sources.create_jira(cloud_id="cloud", project_keys=["ENG"])["uuid"] == "source_new"
-    assert client.sources.create_google_drive(folder_ids=["folder"], include_shared_drives=True)[
-        "uuid"
-    ] == "source_new"
+    assert (
+        client.sources.create_jira(cloud_id="cloud", project_keys=["ENG"])["uuid"] == "source_new"
+    )
+    assert (
+        client.sources.create_google_drive(folder_ids=["folder"], include_shared_drives=True)[
+            "uuid"
+        ]
+        == "source_new"
+    )
     assert client.sources.create_file_upload(name="upload")["uuid"] == "source_new"
 
     dataset = Dataset(client.datasets, {"id": "ds_1"})

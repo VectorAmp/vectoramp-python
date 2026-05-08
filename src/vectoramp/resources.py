@@ -12,10 +12,10 @@ from .sources import (
     FileUploadSource,
     GCSSource,
     GoogleDriveSource,
+    JiraSource,
     S3Source,
     SourceBuilder,
     SourceInput,
-    JiraSource,
     WebSource,
 )
 from .transport import BaseTransport, RestTransport
@@ -798,9 +798,16 @@ class IngestionResource:
         """Create a Google Cloud Storage source."""
         return self.create_source(
             GCSSource(
-                name=name, bucket=bucket, prefix=prefix, project_id=project_id,
-                credentials_json=credentials_json, sync_mode=sync_mode, file_patterns=file_patterns,
-                max_file_size_mb=max_file_size_mb, description=description, metadata=metadata,
+                name=name,
+                bucket=bucket,
+                prefix=prefix,
+                project_id=project_id,
+                credentials_json=credentials_json,
+                sync_mode=sync_mode,
+                file_patterns=file_patterns,
+                max_file_size_mb=max_file_size_mb,
+                description=description,
+                metadata=metadata,
                 config_extra=config_extra,
             )
         )
@@ -822,9 +829,16 @@ class IngestionResource:
         """Create a Jira source. ``include_comments`` defaults to true."""
         return self.create_source(
             JiraSource(
-                name=name, cloud_id=cloud_id, access_token=access_token, project_keys=project_keys,
-                jql=jql, include_comments=include_comments, sync_mode=sync_mode,
-                description=description, metadata=metadata, config_extra=config_extra,
+                name=name,
+                cloud_id=cloud_id,
+                access_token=access_token,
+                project_keys=project_keys,
+                jql=jql,
+                include_comments=include_comments,
+                sync_mode=sync_mode,
+                description=description,
+                metadata=metadata,
+                config_extra=config_extra,
             )
         )
 

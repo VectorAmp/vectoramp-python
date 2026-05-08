@@ -314,7 +314,11 @@ class JiraSource:
     def to_create_request(self) -> JSON:
         if not self.cloud_id:
             raise ValueError("JiraSource requires cloud_id.")
-        config: JSON = {"cloud_id": self.cloud_id, "include_comments": self.include_comments, "sync_mode": self.sync_mode}
+        config: JSON = {
+            "cloud_id": self.cloud_id,
+            "include_comments": self.include_comments,
+            "sync_mode": self.sync_mode,
+        }
         _set_optional(config, "access_token", self.access_token)
         _set_optional_sequence(config, "project_keys", self.project_keys)
         _set_optional(config, "jql", self.jql)
@@ -329,7 +333,9 @@ class JiraSource:
         )
 
 
-TypedSource = Union[GenericSource, WebSource, S3Source, GCSSource, GoogleDriveSource, FileUploadSource, JiraSource]
+TypedSource = Union[
+    GenericSource, WebSource, S3Source, GCSSource, GoogleDriveSource, FileUploadSource, JiraSource
+]
 SourceInput = Union[str, TypedSource]
 
 
