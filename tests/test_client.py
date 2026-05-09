@@ -486,6 +486,8 @@ def test_ingestion_sources_and_jobs() -> None:
             return json_response({"jobs": [], "total": 0, "limit": 10, "offset": 0})
         if request.url.path == "/ingestion/jobs" and request.method == "POST":
             return json_response({"job_id": "job_1"})
+        if request.url.path == "/ingestion/jobs/job_1/retry" and request.method == "POST":
+            return json_response({"job_id": "job_2", "status": "pending"})
         return json_response({"id": "source_1"})
 
     client = make_client(handler)
@@ -494,6 +496,7 @@ def test_ingestion_sources_and_jobs() -> None:
     assert client.ingestion.start_job(source_id="source_1", dataset_id="ds_1")["job_id"] == "job_1"
     assert client.ingestion.list_jobs(dataset_id="ds_1", limit=10)["jobs"] == []
     assert client.ingestion.get_job("job_1")["id"] == "source_1"
+    assert client.ingestion.retry_job("job_1")["job_id"] == "job_2"
     assert calls[0] == ("GET", "/ingestion/sources", {"limit": "10", "offset": "1"})
 
 
