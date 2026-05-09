@@ -977,6 +977,10 @@ class IngestionResource:
         """Return one ingestion job by id."""
         return self._transport.request("GET", f"/ingestion/jobs/{job_id}")
 
+    def retry_job(self, job_id: str) -> JSON:
+        """Queue a fresh full-rerun job from an eligible failed or cancelled job."""
+        return self._transport.request("POST", f"/ingestion/jobs/{job_id}/retry")
+
     def init_upload(self, source_id: str, files: Sequence[Mapping[str, Any]]) -> JSON:
         """Initialize presigned uploads for a file-upload source.
 
