@@ -1,8 +1,5 @@
 # VectorAmp Python SDK
 
-[![pipeline status](https://gitlab.com/VectorAmp/SDK/Python/badges/main/pipeline.svg)](https://gitlab.com/VectorAmp/SDK/Python/-/commits/main)
-[![coverage report](https://gitlab.com/VectorAmp/SDK/Python/badges/main/coverage.svg)](https://gitlab.com/VectorAmp/SDK/Python/-/commits/main)
-
 Python client for the VectorAmp API. It is package-ready, typed, and defaults to `https://api.vectoramp.com`.
 
 > Status: public SDK scaffold. Do not publish packages from this repository until a release is approved.
