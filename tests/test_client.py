@@ -592,6 +592,64 @@ def test_ingest_files_upload_flow(tmp_path: Path) -> None:
     assert uploaded == {"content": b"hello", "content_type": "text/plain"}
 
 
+def test_schedules_crud_and_trigger() -> None:
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append((request.method, request.url.path, dict(request.url.params), request.content))
+        if request.url.path == "/ingestion/schedules" and request.method == "GET":
+            return json_response(
+                {
+                    "schedules": [{"id": "sch_1", "cron": "0 * * * *", "enabled": True}],
+                    "total": 1,
+                    "limit": 10,
+                    "offset": 0,
+                }
+            )
+        if request.url.path == "/ingestion/schedules" and request.method == "POST":
+            return json_response({"id": "sch_2", "cron": "0 0 * * *"}, status_code=201)
+        if request.url.path == "/ingestion/schedules/sch_1" and request.method == "GET":
+            return json_response({"id": "sch_1", "cron": "0 * * * *"})
+        if request.url.path == "/ingestion/schedules/sch_2" and request.method == "PATCH":
+            return json_response({"id": "sch_2", "enabled": False})
+        if request.url.path == "/ingestion/schedules/sch_2" and request.method == "DELETE":
+            return json_response({"deleted": True})
+        if request.url.path == "/ingestion/schedules/sch_1/trigger" and request.method == "POST":
+            return json_response({"job_id": "job_42"}, status_code=202)
+        raise AssertionError(f"Unexpected {request.method} {request.url}")
+
+    client = make_client(handler)
+
+    page = client.schedules.list(limit=10, offset=0)
+    assert page["total"] == 1
+    assert page["schedules"][0]["id"] == "sch_1"
+
+    assert client.schedules.get("sch_1")["id"] == "sch_1"
+
+    created = client.schedules.create(
+        source_id="src_1",
+        dataset_id="ds_1",
+        cron="0 0 * * *",
+        timezone="UTC",
+    )
+    assert created["id"] == "sch_2"
+    create_body = json.loads(calls[2][3])
+    assert create_body == {
+        "source_id": "src_1",
+        "dataset_id": "ds_1",
+        "cron": "0 0 * * *",
+        "timezone": "UTC",
+    }
+
+    updated = client.schedules.update("sch_2", enabled=False)
+    assert updated["enabled"] is False
+    update_body = json.loads(calls[3][3])
+    assert update_body == {"enabled": False}
+
+    assert client.schedules.delete("sch_2") == {"deleted": True}
+    assert client.schedules.trigger("sch_1") == {"job_id": "job_42"}
+
+
 def test_context_manager_closes() -> None:
     closed = {"value": False}
 
