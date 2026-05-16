@@ -1086,6 +1086,127 @@ class IngestionResource:
         return mimetypes.guess_type(path.name)[0] or "application/octet-stream"
 
 
+class SchedulesResource:
+    """Ingestion schedule management.
+
+    Recurring ingestion runs are defined as schedules. Each schedule pairs a
+    source with a target dataset and a cron expression; the ingestion scheduler
+    daemon polls for due schedules and creates jobs as they fire.
+    """
+
+    def __init__(self, transport: BaseTransport) -> None:
+        self._transport = transport
+
+    def list(self, *, limit: int = 50, offset: int = 0) -> JSON:
+        """List schedules for the calling organization.
+
+        Args:
+            limit: Maximum schedules to return. Defaults to ``50``.
+            offset: Pagination offset. Defaults to ``0``.
+
+        Returns:
+            ``{"schedules": [...], "total": int, "limit": int, "offset": int}``.
+        """
+        return self._transport.request(
+            "GET", "/ingestion/schedules", params={"limit": limit, "offset": offset}
+        )
+
+    def get(self, schedule_id: str) -> JSON:
+        """Return one schedule by id."""
+        return self._transport.request("GET", f"/ingestion/schedules/{schedule_id}")
+
+    def create(
+        self,
+        *,
+        source_id: str,
+        dataset_id: str,
+        cron: str,
+        timezone: Optional[str] = None,
+        pipeline_id: Optional[str] = None,
+        enabled: Optional[bool] = None,
+        name: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+    ) -> JSON:
+        """Create a recurring ingestion schedule.
+
+        Args:
+            source_id: Ingestion source id to pull from on each run.
+            dataset_id: Dataset id to ingest into.
+            cron: 5-field cron expression (e.g. ``"0 * * * *"`` for hourly).
+            timezone: Optional IANA timezone. Defaults to ``UTC`` server-side.
+            pipeline_id: Optional pipeline id. Omit to use the default ingestion pipeline.
+            enabled: Optional flag, defaults to ``True`` server-side.
+            name: Optional human-readable name.
+            metadata: Optional metadata blob attached to the schedule.
+
+        Returns:
+            Created schedule JSON.
+        """
+        body: dict[str, Any] = {
+            "source_id": source_id,
+            "dataset_id": dataset_id,
+            "cron": cron,
+        }
+        if timezone is not None:
+            body["timezone"] = timezone
+        if pipeline_id is not None:
+            body["pipeline_id"] = pipeline_id
+        if enabled is not None:
+            body["enabled"] = enabled
+        if name is not None:
+            body["name"] = name
+        if metadata is not None:
+            body["metadata"] = dict(metadata)
+        return self._transport.request("POST", "/ingestion/schedules", json_body=body)
+
+    def update(
+        self,
+        schedule_id: str,
+        *,
+        cron: Optional[str] = None,
+        timezone: Optional[str] = None,
+        pipeline_id: Optional[str] = None,
+        enabled: Optional[bool] = None,
+        name: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+    ) -> JSON:
+        """Update a schedule. Pass only the fields you want to change.
+
+        Returns:
+            Updated schedule JSON.
+        """
+        body: dict[str, Any] = {}
+        if cron is not None:
+            body["cron"] = cron
+        if timezone is not None:
+            body["timezone"] = timezone
+        if pipeline_id is not None:
+            body["pipeline_id"] = pipeline_id
+        if enabled is not None:
+            body["enabled"] = enabled
+        if name is not None:
+            body["name"] = name
+        if metadata is not None:
+            body["metadata"] = dict(metadata)
+        return self._transport.request(
+            "PATCH", f"/ingestion/schedules/{schedule_id}", json_body=body
+        )
+
+    def delete(self, schedule_id: str) -> JSON:
+        """Delete a schedule."""
+        return self._transport.request("DELETE", f"/ingestion/schedules/{schedule_id}")
+
+    def trigger(self, schedule_id: str) -> JSON:
+        """Trigger an immediate run for a schedule, outside its cron cadence.
+
+        Returns:
+            ``{"job_id": "..."}`` for the newly created ingestion job.
+        """
+        return self._transport.request(
+            "POST", f"/ingestion/schedules/{schedule_id}/trigger"
+        )
+
+
 class IntelligenceResource:
     """RAG query APIs."""
 

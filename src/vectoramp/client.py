@@ -8,7 +8,7 @@ from typing import Iterator, Optional, Type
 
 import httpx
 
-from .resources import DatasetsResource, IngestionResource, IntelligenceResource
+from .resources import DatasetsResource, IngestionResource, IntelligenceResource, SchedulesResource
 from .transport import BaseTransport, RestTransport
 from .types import JSON, ConversationTurn
 
@@ -28,6 +28,7 @@ class VectorAmp:
         datasets: Dataset management, search, embedding, and insertion APIs.
         ingestion: Source, upload, and ingestion-job APIs.
         sources: Alias for ``ingestion``.
+        schedules: Recurring ingestion schedule management.
         intelligence: RAG query and streaming APIs.
     """
 
@@ -50,6 +51,7 @@ class VectorAmp:
         self.datasets = DatasetsResource(self.transport, client=self)
         self.ingestion = IngestionResource(self.transport)
         self.sources = self.ingestion
+        self.schedules = SchedulesResource(self.transport)
         self.intelligence = IntelligenceResource(self.transport)
 
     def ask(
