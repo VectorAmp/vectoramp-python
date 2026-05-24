@@ -19,6 +19,7 @@ from vectoramp import (
     S3Source,
     VectorAmp,
     WebSource,
+    openai,
 )
 
 
@@ -65,6 +66,24 @@ def test_dataset_create_forces_sable_and_auth_header() -> None:
     assert seen["body"]["filters"] == {"category": "string"}
     assert seen["body"]["metadata_schema"] == {"title": {"type": "string"}}
     assert seen["body"]["tuning"] == {"replicas": 1}
+
+
+def test_dataset_create_openai_helper_infers_dimension() -> None:
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return json_response({"id": "ds_openai", "index_type": "sable"}, 201)
+
+    client = make_client(handler)
+    client.datasets.create(name="openai-docs", embedding=openai("small"))
+
+    assert seen["body"]["dim"] == 1536
+    assert seen["body"]["embedding"] == {
+        "provider": "openai",
+        "model": "text-embedding-3-small",
+        "secret_ref": "emb:openai:api_key",
+    }
 
 
 def test_list_get_delete_and_stats() -> None:

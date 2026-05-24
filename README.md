@@ -47,15 +47,15 @@ client = VectorAmp(api_key="va_...", base_url="http://localhost:8080")
 
 ## Datasets
 
-Dataset creation always requests the SABLE index. The SDK intentionally does **not** expose an `index_type` option.
+Dataset creation always requests the SABLE index. The SDK intentionally does **not** expose an `index_type` option. Built-in helpers infer dimensions for VectorAmp 4B and OpenAI `text-embedding-3-small`/`text-embedding-3-large`.
 
 ```python
+from vectoramp import openai
+
 dataset = client.datasets.create(
     name="product-docs",
-    dim=2560,
     metric="cosine",
-    embedding_provider="vectoramp",
-    embedding_model="VectorAmp-Embedding-4B",
+    embedding=openai("small"),  # or openai("large")
 )
 
 dataset_id = dataset.id  # also available as dataset["id"] for compatibility
