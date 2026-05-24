@@ -8,6 +8,7 @@ from collections.abc import ItemsView, KeysView, ValuesView
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Optional, Sequence, Union
 
+from .embeddings import EMBEDDING_DIMENSIONS, VECTORAMP_EMBEDDING_4B
 from .sources import (
     FileUploadSource,
     GCSSource,
@@ -346,10 +347,11 @@ class DatasetsResource:
         self,
         *,
         name: str,
-        dim: int,
+        dim: Optional[int] = None,
         metric: Metric = "cosine",
+        embedding: Optional[Mapping[str, str]] = None,
         embedding_provider: str = "vectoramp",
-        embedding_model: str = "VectorAmp-Embedding-4B",
+        embedding_model: str = VECTORAMP_EMBEDDING_4B,
         filters: Optional[Mapping[str, Any]] = None,
         metadata_schema: Optional[Mapping[str, Any]] = None,
         tuning: Optional[Mapping[str, Any]] = None,
@@ -361,8 +363,10 @@ class DatasetsResource:
 
         Args:
             name: Dataset name.
-            dim: Vector dimension.
+            dim: Vector dimension. Inferred for built-in embedding helpers when omitted.
             metric: Distance metric. Defaults to ``"cosine"``.
+            embedding: Nested embedding config. Use ``openai("small")`` or
+                ``openai("large")`` for OpenAI BYOM datasets.
             embedding_provider: Embedding provider. Defaults to ``"vectoramp"``.
             embedding_model: Embedding model. Defaults to
                 ``"VectorAmp-Embedding-4B"``.
@@ -373,11 +377,18 @@ class DatasetsResource:
         Returns:
             Created ``Dataset`` object.
         """
+        embedding_config = {"provider": embedding_provider, "model": embedding_model}
+        if embedding is not None:
+            embedding_config.update(dict(embedding))
+        resolved_dim = dim or EMBEDDING_DIMENSIONS.get(str(embedding_config.get("model")))
+        if resolved_dim is None:
+            raise ValueError("dim is required for custom embedding models")
+
         body: JSON = {
             "name": name,
-            "dim": dim,
+            "dim": resolved_dim,
             "metric": metric,
-            "embedding": {"provider": embedding_provider, "model": embedding_model},
+            "embedding": embedding_config,
             "index_type": "sable",
         }
         if filters is not None:
