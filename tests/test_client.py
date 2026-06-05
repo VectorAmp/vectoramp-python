@@ -222,9 +222,9 @@ def test_dataset_resource_instance_methods_delegate_to_services(tmp_path: Path) 
             return json_response({"answer": "yes"})
         if request.url.path == "/ingestion/jobs":
             return json_response({"job_id": "job_1"})
-        if request.url.path == "/v1/sources":
+        if request.url.path == "/ingestion/sources":
             return json_response({"id": "source_2"})
-        if request.url.path == "/v1/sources/source_2/upload/init":
+        if request.url.path == "/ingestion/sources/source_2/upload/init":
             return json_response(
                 {
                     "job_id": "job_2",
@@ -237,7 +237,7 @@ def test_dataset_resource_instance_methods_delegate_to_services(tmp_path: Path) 
                     ],
                 }
             )
-        if request.url.path == "/v1/sources/source_2/upload/complete":
+        if request.url.path == "/ingestion/sources/source_2/upload/complete":
             return json_response({"job_id": "job_2", "status": "pending"})
         if request.method == "DELETE" and request.url.path == "/datasets/ds_1":
             return httpx.Response(204)
@@ -489,7 +489,7 @@ def test_source_create_helpers_and_dataset_typed_ingest() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content) if request.content else None
         calls.append((request.method, request.url.path, body))
-        if request.url.path == "/v1/sources":
+        if request.url.path == "/ingestion/sources":
             return json_response({"uuid": "source_new"})
         if request.url.path == "/ingestion/jobs":
             return json_response({"job_id": "job_new"})
@@ -581,12 +581,12 @@ def test_ingest_files_upload_flow(tmp_path: Path) -> None:
             uploaded["content"] = request.content
             uploaded["content_type"] = request.headers["content-type"]
             return httpx.Response(200)
-        if request.url.path == "/v1/sources":
+        if request.url.path == "/ingestion/sources":
             body = json.loads(request.content)
             assert body["metadata"] == {"dataset_id": "ds_1"}
             assert body["name"].startswith("file-upload-sample-")
             return json_response({"id": "source_1"})
-        if request.url.path == "/v1/sources/source_1/upload/init":
+        if request.url.path == "/ingestion/sources/source_1/upload/init":
             assert json.loads(request.content)["files"][0]["name"] == "sample.txt"
             return json_response(
                 {
@@ -600,7 +600,7 @@ def test_ingest_files_upload_flow(tmp_path: Path) -> None:
                     ],
                 }
             )
-        if request.url.path == "/v1/sources/source_1/upload/complete":
+        if request.url.path == "/ingestion/sources/source_1/upload/complete":
             assert json.loads(request.content) == {"job_id": "job_1", "file_ids": ["file_1"]}
             return json_response({"job_id": "job_1", "status": "pending"})
         raise AssertionError(str(request.url))

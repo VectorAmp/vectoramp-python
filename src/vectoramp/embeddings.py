@@ -23,7 +23,11 @@ def openai(size: OpenAIEmbeddingSize = "small") -> EmbeddingConfig:
 
     return {
         "provider": "openai",
-        "model": OPENAI_TEXT_EMBEDDING_3_LARGE if size == "large" else OPENAI_TEXT_EMBEDDING_3_SMALL,
+        "model": (
+            OPENAI_TEXT_EMBEDDING_3_LARGE
+            if size == "large"
+            else OPENAI_TEXT_EMBEDDING_3_SMALL
+        ),
         "secret_ref": "emb:openai:api_key",
     }
 

@@ -696,7 +696,7 @@ class IngestionResource:
                 body["description"] = description
             if metadata is not None:
                 body["metadata"] = dict(metadata)
-        return self._transport.request("POST", "/v1/sources", json_body=body)
+        return self._transport.request("POST", "/ingestion/sources", json_body=body)
 
     def create(self, source: SourceBuilder) -> JSON:
         """Create an ingestion source from a source builder."""
@@ -1003,7 +1003,7 @@ class IngestionResource:
             Upload session JSON, including upload URLs and job id.
         """
         return self._transport.request(
-            "POST", f"/v1/sources/{source_id}/upload/init", json_body={"files": list(files)}
+            "POST", f"/ingestion/sources/{source_id}/upload/init", json_body={"files": list(files)}
         )
 
     def complete_upload(self, source_id: str, *, job_id: str, file_ids: Sequence[str]) -> JSON:
@@ -1019,7 +1019,7 @@ class IngestionResource:
         """
         return self._transport.request(
             "POST",
-            f"/v1/sources/{source_id}/upload/complete",
+            f"/ingestion/sources/{source_id}/upload/complete",
             json_body={"job_id": job_id, "file_ids": list(file_ids)},
         )
 
