@@ -1075,7 +1075,11 @@ class IngestionResource:
                 content=path.read_bytes(),
                 content_type=self._guess_content_type(path),
             )
-        return self.complete_upload(source_id, job_id=str(upload["job_id"]), file_ids=file_ids)
+        job_id = str(upload["job_id"])
+        complete = self.complete_upload(source_id, job_id=job_id, file_ids=file_ids)
+        if isinstance(complete, dict):
+            complete.setdefault("job_id", job_id)
+        return complete
 
     @staticmethod
     def _default_upload_source_name(paths: Sequence[Path]) -> str:
