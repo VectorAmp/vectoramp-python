@@ -60,6 +60,7 @@ class Dataset:
         include_embeddings: Optional[bool] = None,
         include_documents: Optional[bool] = None,
         include_metadata: Optional[bool] = None,
+        rerank: Optional[Union[bool, Mapping[str, Any]]] = None,
     ) -> JSON:
         """Search this dataset by text or vector.
 
@@ -85,6 +86,8 @@ class Dataset:
             include_documents: Whether result vectors include document text.
             include_metadata: Whether result vectors include metadata; defaults to
                 API behavior when omitted.
+            rerank: Enable semantic reranking. Use ``True`` or ``{"enabled": True}``;
+                provider defaults to ``vectoramp`` and model to ``VectorAmp-Rerank-v1``.
 
         Returns:
             Search response JSON.
@@ -108,6 +111,7 @@ class Dataset:
             include_embeddings=include_embeddings,
             include_documents=include_documents,
             include_metadata=include_metadata,
+            rerank=rerank,
         )
 
     def insert(self, vectors: Sequence[Vector]) -> JSON:
@@ -478,6 +482,7 @@ class DatasetsResource:
         include_embeddings: Optional[bool] = None,
         include_documents: Optional[bool] = None,
         include_metadata: Optional[bool] = None,
+        rerank: Optional[Union[bool, Mapping[str, Any]]] = None,
     ) -> JSON:
         """Search a dataset by text or vector.
 
@@ -504,6 +509,8 @@ class DatasetsResource:
             include_documents: Whether result vectors include document text.
             include_metadata: Whether result vectors include metadata; defaults to
                 API behavior when omitted.
+            rerank: Enable semantic reranking. Use ``True`` or ``{"enabled": True}``;
+                provider defaults to ``vectoramp`` and model to ``VectorAmp-Rerank-v1``.
 
         Returns:
             Search response JSON.
@@ -539,6 +546,7 @@ class DatasetsResource:
             "include_embeddings": include_embeddings,
             "include_documents": include_documents,
             "include_metadata": include_metadata,
+            "rerank": dict(rerank) if isinstance(rerank, Mapping) else rerank,
         }
         body.update({key: value for key, value in optional.items() if value is not None})
         return self._transport.request("POST", f"/datasets/{dataset_id}/search", json_body=body)
