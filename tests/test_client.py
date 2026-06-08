@@ -148,6 +148,7 @@ def test_search_text_payload() -> None:
         sparse_query="hello",
         alpha=0.7,
         include_documents=True,
+        rerank={"enabled": True},
     )
     assert seen["body"] == {
         "top_k": 3,
@@ -158,6 +159,7 @@ def test_search_text_payload() -> None:
         "sparse_query": "hello",
         "alpha": 0.7,
         "include_documents": True,
+        "rerank": {"enabled": True},
     }
 
 

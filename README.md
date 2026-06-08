@@ -140,6 +140,7 @@ results = dataset.search(
     hybrid=True,
     sparse_query="wireless headphones",
     alpha=0.7,
+    rerank={"enabled": True},  # vectoramp / VectorAmp-Rerank-v1
 )
 ```
 
