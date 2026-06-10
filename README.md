@@ -291,3 +291,13 @@ dataset = client.datasets.get("dataset_id")
 dataset.list_documents()
 dataset.download_document("document_id")
 ```
+
+### Intelligence sessions
+
+```python
+session = client.intelligence.create_session(title="Planning", dataset_id=dataset.id)
+client.intelligence.append_message(session["id"], role="user", content="Summarize the docs")
+messages = client.intelligence.list_messages(session["id"], limit=100)
+```
+
+Intelligence answers return `sources[]` and `chunks[]`. Inline `[1]` citations refer to `sources[0]`; `preview_ref` is an opaque preview token, not a storage key.
