@@ -687,3 +687,65 @@ def test_context_manager_closes() -> None:
     with VectorAmp(transport=Transport()):
         pass
     assert closed["value"] is True
+
+
+def test_intelligence_sessions_and_messages() -> None:
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content) if request.content else None
+        calls.append((request.method, request.url.path, dict(request.url.params), body))
+        if request.method == "POST" and request.url.path == "/intelligence/sessions":
+            return json_response({"id": "sess_1", "title": "Planning"}, 201)
+        if request.method == "GET" and request.url.path == "/intelligence/sessions":
+            return json_response({"sessions": [{"id": "sess_1"}]})
+        if request.method == "GET" and request.url.path == "/intelligence/sessions/sess_1":
+            return json_response({"id": "sess_1"})
+        if (
+            request.method == "POST"
+            and request.url.path == "/intelligence/sessions/sess_1/messages"
+        ):
+            return json_response({"id": "msg_1", "role": "user", "content": "hello"}, 201)
+        if (
+            request.method == "GET"
+            and request.url.path == "/intelligence/sessions/sess_1/messages"
+        ):
+            return json_response({
+                "messages": [{"id": "msg_1", "role": "user", "content": "hello"}]
+            })
+        raise AssertionError(f"unexpected request {request.method} {request.url}")
+
+    client = make_client(handler)
+
+    assert client.intelligence.create_session(
+        title="Planning", workspace_id="ws_1", dataset_id="ds_1", metadata={"team": "eng"}
+    )["id"] == "sess_1"
+    assert client.intelligence.list_sessions(limit=25)["sessions"][0]["id"] == "sess_1"
+    assert client.intelligence.get_session("sess_1")["id"] == "sess_1"
+    assert client.intelligence.append_message(
+        "sess_1", role="user", content="hello", metadata={"turn": 1}
+    )["id"] == "msg_1"
+    assert client.intelligence.list_messages("sess_1", limit=50)["messages"][0]["id"] == "msg_1"
+
+    assert calls == [
+        (
+            "POST",
+            "/intelligence/sessions",
+            {},
+            {
+                "title": "Planning",
+                "workspace_id": "ws_1",
+                "dataset_id": "ds_1",
+                "metadata": {"team": "eng"},
+            },
+        ),
+        ("GET", "/intelligence/sessions", {"limit": "25"}, None),
+        ("GET", "/intelligence/sessions/sess_1", {}, None),
+        (
+            "POST",
+            "/intelligence/sessions/sess_1/messages",
+            {},
+            {"role": "user", "content": "hello", "metadata": {"turn": 1}},
+        ),
+        ("GET", "/intelligence/sessions/sess_1/messages", {"limit": "50"}, None),
+    ]

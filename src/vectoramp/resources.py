@@ -1300,6 +1300,57 @@ class IntelligenceResource:
         )
         yield from self._transport.stream("POST", "/intelligence/query", json_body=body)
 
+
+    def create_session(
+        self,
+        *,
+        title: Optional[str] = None,
+        workspace_id: Optional[str] = None,
+        dataset_id: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+    ) -> JSON:
+        """Create a persistent Intelligence session."""
+        body: JSON = {}
+        if title is not None:
+            body["title"] = title
+        if workspace_id is not None:
+            body["workspace_id"] = workspace_id
+        if dataset_id is not None:
+            body["dataset_id"] = dataset_id
+        if metadata is not None:
+            body["metadata"] = dict(metadata)
+        return self._transport.request("POST", "/intelligence/sessions", json_body=body)
+
+    def list_sessions(self, *, limit: int = 50) -> JSON:
+        """List persistent Intelligence sessions."""
+        return self._transport.request("GET", "/intelligence/sessions", params={"limit": limit})
+
+    def get_session(self, session_id: str) -> JSON:
+        """Fetch one persistent Intelligence session."""
+        return self._transport.request("GET", f"/intelligence/sessions/{session_id}")
+
+    def append_message(
+        self,
+        session_id: str,
+        *,
+        role: str,
+        content: str,
+        metadata: Optional[Mapping[str, Any]] = None,
+    ) -> JSON:
+        """Append a message to a persistent Intelligence session."""
+        body: JSON = {"role": role, "content": content}
+        if metadata is not None:
+            body["metadata"] = dict(metadata)
+        return self._transport.request(
+            "POST", f"/intelligence/sessions/{session_id}/messages", json_body=body
+        )
+
+    def list_messages(self, session_id: str, *, limit: int = 100) -> JSON:
+        """List messages for a persistent Intelligence session."""
+        return self._transport.request(
+            "GET", f"/intelligence/sessions/{session_id}/messages", params={"limit": limit}
+        )
+
     @staticmethod
     def _body(
         query: str,
