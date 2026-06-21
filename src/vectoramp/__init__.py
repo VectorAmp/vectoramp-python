@@ -12,6 +12,7 @@ from .embeddings import (
 from .exceptions import APIError, AuthenticationError, VectorAmpError
 from .resources import Dataset
 from .sources import (
+    ConfluenceSource,
     FileUploadSource,
     GCSSource,
     GenericSource,
@@ -24,6 +25,7 @@ from .sources import (
 __all__ = [
     "APIError",
     "AuthenticationError",
+    "ConfluenceSource",
     "Dataset",
     "EMBEDDING_DIMENSIONS",
     "EMBEDDINGS",

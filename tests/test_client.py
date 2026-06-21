@@ -10,6 +10,7 @@ import pytest
 from vectoramp import (
     APIError,
     AuthenticationError,
+    ConfluenceSource,
     Dataset,
     FileUploadSource,
     GCSSource,
@@ -66,6 +67,52 @@ def test_dataset_create_forces_sable_and_auth_header() -> None:
     assert seen["body"]["filters"] == {"category": "string"}
     assert seen["body"]["metadata_schema"] == {"title": {"type": "string"}}
     assert seen["body"]["tuning"] == {"replicas": 1}
+
+
+def test_dataset_create_minimal_name_only_defaults() -> None:
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return json_response({"id": "ds_min", "index_type": "sable"}, 201)
+
+    client = make_client(handler)
+    dataset = client.datasets.create(name="docs")
+
+    assert dataset.id == "ds_min"
+    assert seen["body"]["name"] == "docs"
+    assert seen["body"]["dim"] == 2560
+    assert seen["body"]["metric"] == "cosine"
+    assert seen["body"]["index_type"] == "sable"
+    assert seen["body"]["embedding"] == {
+        "provider": "vectoramp",
+        "model": "VectorAmp-Embedding-4B",
+    }
+    # hybrid is not sent unless explicitly requested.
+    assert "hybrid" not in seen["body"]
+
+
+def test_dataset_create_hybrid() -> None:
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return json_response({"id": "ds_hybrid", "index_type": "sable"}, 201)
+
+    client = make_client(handler)
+    client.datasets.create(name="docs", hybrid=True)
+
+    assert seen["body"]["hybrid"] is True
+    assert seen["body"]["index_type"] == "sable"
+    assert seen["body"]["dim"] == 2560
+
+
+def test_dataset_create_custom_model_requires_dim() -> None:
+    client = make_client(lambda request: json_response({}))
+    with pytest.raises(ValueError):
+        client.datasets.create(
+            name="docs", embedding={"provider": "acme", "model": "acme-embed-v1"}
+        )
 
 
 def test_dataset_create_openai_helper_infers_dimension() -> None:
@@ -407,7 +454,6 @@ def test_typed_source_builders_use_ingestion_field_names() -> None:
         "source_type": "web",
         "config": {
             "start_urls": ["https://docs.example.com"],
-            "sync_mode": "full",
             "max_depth": 2,
             "max_pages": 50,
             "allowed_domains": ["docs.example.com"],
@@ -434,12 +480,16 @@ def test_typed_source_builders_use_ingestion_field_names() -> None:
     assert S3Source(bucket="docs-bucket").to_create_request() == {
         "name": "s3-docs-bucket",
         "source_type": "s3",
-        "config": {"bucket": "docs-bucket", "region": "us-east-1", "sync_mode": "full"},
+        "config": {"bucket": "docs-bucket", "region": "us-east-1"},
     }
+    # sync_mode is sent only when set; otherwise the server default applies.
+    assert S3Source(bucket="docs-bucket", sync_mode="incremental").to_create_request()["config"][
+        "sync_mode"
+    ] == "incremental"
     assert GCSSource(bucket="docs-bucket", prefix="docs/").to_create_request() == {
         "name": "gcs-docs-bucket",
         "source_type": "gcs",
-        "config": {"bucket": "docs-bucket", "sync_mode": "full", "prefix": "docs/"},
+        "config": {"bucket": "docs-bucket", "prefix": "docs/"},
     }
     assert GoogleDriveSource(
         name="drive",
@@ -451,7 +501,6 @@ def test_typed_source_builders_use_ingestion_field_names() -> None:
         "source_type": "gdrive",
         "config": {
             "auth_mode": "oauth",
-            "sync_mode": "full",
             "folder_ids": ["folder_1"],
             "include_shared_drives": True,
             "oauth_credentials": {"token": "secret"},
@@ -463,10 +512,33 @@ def test_typed_source_builders_use_ingestion_field_names() -> None:
         "config": {
             "cloud_id": "cloud_1",
             "include_comments": True,
-            "sync_mode": "full",
             "project_keys": ["ENG"],
         },
     }
+    assert ConfluenceSource(
+        cloud_id="cloud_1",
+        username="user@example.com",
+        api_token="secret-token",
+        spaces=["ENG", "DOCS"],
+    ).to_create_request() == {
+        "name": "confluence-cloud-1",
+        "source_type": "confluence",
+        "config": {
+            "auth_mode": "basic",
+            "include_attachments": False,
+            "cloud_id": "cloud_1",
+            "username": "user@example.com",
+            "api_token": "secret-token",
+            "spaces": ["ENG", "DOCS"],
+        },
+    }
+    # base_url-only Confluence source derives its name from the host.
+    assert (
+        ConfluenceSource(base_url="https://acme.atlassian.net").to_create_request()["name"]
+        == "confluence-acme-atlassian-net"
+    )
+    with pytest.raises(ValueError):
+        ConfluenceSource().to_create_request()
     assert FileUploadSource(name="upload").to_create_request() == {
         "name": "upload",
         "source_type": "file_upload",
@@ -526,7 +598,6 @@ def test_source_create_helpers_and_dataset_typed_ingest() -> None:
         "source_type": "web",
         "config": {
             "start_urls": ["https://example.com"],
-            "sync_mode": "full",
             "max_depth": 1,
         },
     }
@@ -546,6 +617,97 @@ def test_source_create_helpers_and_dataset_typed_ingest() -> None:
         "/ingestion/jobs",
         {"source_id": "source_new", "dataset_id": "ds_1", "pipeline_id": "pipe_1"},
     )
+
+
+def test_create_confluence_helper_and_typed_ingest() -> None:
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content) if request.content else None
+        calls.append((request.method, request.url.path, body))
+        if request.url.path == "/ingestion/sources":
+            return json_response({"id": "source_conf"})
+        if request.url.path == "/ingestion/jobs":
+            return json_response({"job_id": "job_conf"})
+        raise AssertionError(str(request.url))
+
+    client = make_client(handler)
+
+    created = client.sources.create_confluence(
+        cloud_id="cloud_1",
+        username="user@example.com",
+        api_token="secret",
+        spaces=["ENG"],
+        include_attachments=True,
+    )
+    assert created["id"] == "source_conf"
+    assert calls[0][1] == "/ingestion/sources"
+    assert calls[0][2] == {
+        "name": "confluence-cloud-1",
+        "source_type": "confluence",
+        "config": {
+            "auth_mode": "basic",
+            "include_attachments": True,
+            "cloud_id": "cloud_1",
+            "username": "user@example.com",
+            "api_token": "secret",
+            "spaces": ["ENG"],
+        },
+    }
+    # sync_mode is not forced; the server applies its default (incremental).
+    assert "sync_mode" not in calls[0][2]["config"]
+
+    # The typed builder flows straight into ingest_source on a dataset.
+    dataset = Dataset(client.datasets, {"id": "ds_1"})
+    assert dataset.ingest_source(
+        ConfluenceSource(base_url="https://acme.atlassian.net", spaces=["DOCS"])
+    ) == {"job_id": "job_conf"}
+    assert calls[-2][2]["source_type"] == "confluence"
+    assert calls[-2][2]["name"] == "confluence-acme-atlassian-net"
+    assert calls[-1] == (
+        "POST",
+        "/ingestion/jobs",
+        {"source_id": "source_conf", "dataset_id": "ds_1"},
+    )
+
+
+def test_numeric_vector_ids_serialize_as_json_numbers() -> None:
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/insert"):
+            # Inspect the raw bytes so we can assert the id is a JSON number,
+            # not a quoted string. Normalize whitespace so the check is
+            # independent of the serializer's separator style.
+            captured["raw"] = "".join(request.content.decode("utf-8").split())
+            captured["body"] = json.loads(request.content)
+            return json_response({"inserted": 2})
+        if request.url.path.endswith("/embed"):
+            return json_response({"embeddings": [[0.1, 0.2]]})
+        raise AssertionError(str(request.url))
+
+    client = make_client(handler)
+
+    # insert_vectors keeps integer ids as numbers.
+    client.datasets.insert_vectors(
+        "ds_1",
+        [
+            {"id": 42, "values": [0.1, 0.2]},
+            {"id": "str-id", "values": [0.3, 0.4]},
+        ],
+    )
+    assert captured["body"]["vectors"][0]["id"] == 42
+    assert isinstance(captured["body"]["vectors"][0]["id"], int)
+    assert captured["body"]["vectors"][1]["id"] == "str-id"
+    # The on-the-wire JSON must contain a bare number, not "42".
+    assert '"id":42' in captured["raw"]
+    assert '"id":"42"' not in captured["raw"]
+
+    # add_texts also preserves an explicit integer id.
+    client.datasets.add_texts("ds_1", "hello", ids=[7])
+    assert captured["body"]["vectors"][0]["id"] == 7
+    assert isinstance(captured["body"]["vectors"][0]["id"], int)
+    assert '"id":7' in captured["raw"]
 
 
 def test_ingestion_sources_and_jobs() -> None:
@@ -713,6 +875,8 @@ def test_intelligence_sessions_and_messages() -> None:
             return json_response({
                 "messages": [{"id": "msg_1", "role": "user", "content": "hello"}]
             })
+        if request.method == "DELETE" and request.url.path == "/intelligence/sessions/sess_1":
+            return json_response({"deleted": True})
         raise AssertionError(f"unexpected request {request.method} {request.url}")
 
     client = make_client(handler)
@@ -726,6 +890,7 @@ def test_intelligence_sessions_and_messages() -> None:
         "sess_1", role="user", content="hello", metadata={"turn": 1}
     )["id"] == "msg_1"
     assert client.intelligence.list_messages("sess_1", limit=50)["messages"][0]["id"] == "msg_1"
+    assert client.intelligence.delete_session("sess_1")["deleted"] is True
 
     assert calls == [
         (
@@ -748,4 +913,5 @@ def test_intelligence_sessions_and_messages() -> None:
             {"role": "user", "content": "hello", "metadata": {"turn": 1}},
         ),
         ("GET", "/intelligence/sessions/sess_1/messages", {"limit": "50"}, None),
+        ("DELETE", "/intelligence/sessions/sess_1", {}, None),
     ]
