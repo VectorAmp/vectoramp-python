@@ -14,8 +14,13 @@ class EmbeddingConfig(TypedDict):
     model: str
 
 
+# A vector record id may be a string or an integer. Integer ids are serialized
+# as JSON numbers (not coerced to strings) so the API preserves them verbatim.
+VectorId = Union[str, int]
+
+
 class Vector(TypedDict, total=False):
-    id: str
+    id: VectorId
     values: Sequence[float]
     metadata: Metadata
 

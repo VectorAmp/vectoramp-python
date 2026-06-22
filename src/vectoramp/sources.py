@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 from .types import JSON
 
-KnownSourceType = Literal["s3", "web", "gcs", "gdrive", "file_upload", "jira"]
+KnownSourceType = Literal["s3", "web", "gcs", "gdrive", "file_upload", "jira", "confluence"]
 
 
 @runtime_checkable
@@ -63,7 +63,8 @@ class WebSource:
         include_patterns: Optional URL include patterns.
         exclude_patterns: Optional URL exclude patterns.
         crawl_delay_seconds: Optional delay between requests.
-        sync_mode: Sync mode. Defaults to ``"full"``.
+        sync_mode: Optional sync mode. Omitted from the request when ``None`` so
+            the server applies its default (``"incremental"``).
         description: Optional source description.
         metadata: Optional source metadata.
         config_extra: Optional extra config fields merged into the request.
@@ -79,7 +80,7 @@ class WebSource:
     crawl_delay_seconds: Optional[float] = None
     include_assets: Optional[bool] = None
     max_assets_per_page: Optional[int] = None
-    sync_mode: str = "full"
+    sync_mode: Optional[str] = None
     description: Optional[str] = None
     metadata: Optional[Mapping[str, Any]] = None
     config_extra: Optional[Mapping[str, Any]] = None
@@ -88,7 +89,8 @@ class WebSource:
         """Return source-create request fields for this web source."""
         if not self.start_urls:
             raise ValueError("WebSource requires at least one start URL.")
-        config: JSON = {"start_urls": list(self.start_urls), "sync_mode": self.sync_mode}
+        config: JSON = {"start_urls": list(self.start_urls)}
+        _set_optional(config, "sync_mode", self.sync_mode)
         _set_optional(config, "max_depth", self.max_depth)
         _set_optional(config, "max_pages", self.max_pages)
         _set_optional_sequence(config, "allowed_domains", self.allowed_domains)
@@ -116,7 +118,8 @@ class S3Source:
         bucket: S3 bucket name. Required.
         region: AWS region. Defaults to ``"us-east-1"``.
         prefix: Optional key prefix.
-        sync_mode: Sync mode. Defaults to ``"full"``.
+        sync_mode: Optional sync mode. Omitted from the request when ``None`` so
+            the server applies its default (``"incremental"``).
         access_key_id: Optional AWS access key id.
         secret_access_key: Optional AWS secret access key.
         role_arn: Optional role ARN.
@@ -132,7 +135,7 @@ class S3Source:
     bucket: str = ""
     region: str = "us-east-1"
     prefix: Optional[str] = None
-    sync_mode: str = "full"
+    sync_mode: Optional[str] = None
     access_key_id: Optional[str] = None
     secret_access_key: Optional[str] = None
     role_arn: Optional[str] = None
@@ -147,7 +150,8 @@ class S3Source:
         """Return source-create request fields for this S3 source."""
         if not self.bucket:
             raise ValueError("S3Source requires bucket.")
-        config: JSON = {"bucket": self.bucket, "region": self.region, "sync_mode": self.sync_mode}
+        config: JSON = {"bucket": self.bucket, "region": self.region}
+        _set_optional(config, "sync_mode", self.sync_mode)
         _set_optional(config, "prefix", self.prefix)
         _set_optional(config, "access_key_id", self.access_key_id)
         _set_optional(config, "secret_access_key", self.secret_access_key)
@@ -174,7 +178,7 @@ class GCSSource:
     prefix: Optional[str] = None
     project_id: Optional[str] = None
     credentials_json: Optional[Mapping[str, Any]] = None
-    sync_mode: str = "full"
+    sync_mode: Optional[str] = None
     file_patterns: Optional[Sequence[str]] = None
     max_file_size_mb: Optional[int] = None
     description: Optional[str] = None
@@ -184,7 +188,8 @@ class GCSSource:
     def to_create_request(self) -> JSON:
         if not self.bucket:
             raise ValueError("GCSSource requires bucket.")
-        config: JSON = {"bucket": self.bucket, "sync_mode": self.sync_mode}
+        config: JSON = {"bucket": self.bucket}
+        _set_optional(config, "sync_mode", self.sync_mode)
         _set_optional(config, "prefix", self.prefix)
         _set_optional(config, "project_id", self.project_id)
         if self.credentials_json is not None:
@@ -213,7 +218,8 @@ class GoogleDriveSource:
         auth_mode: Auth mode. Defaults to ``"oauth"``.
         oauth_credentials: Optional OAuth credential payload.
         include_shared_drives: Optional shared-drive toggle.
-        sync_mode: Sync mode. Defaults to ``"full"``.
+        sync_mode: Optional sync mode. Omitted from the request when ``None`` so
+            the server applies its default (``"incremental"``).
         service_account_json: Optional service-account credential payload.
         credentials_json: Optional generic credential payload.
         description: Optional source description.
@@ -227,7 +233,7 @@ class GoogleDriveSource:
     auth_mode: str = "oauth"
     oauth_credentials: Optional[Mapping[str, Any]] = None
     include_shared_drives: Optional[bool] = None
-    sync_mode: str = "full"
+    sync_mode: Optional[str] = None
     service_account_json: Optional[Mapping[str, Any]] = None
     credentials_json: Optional[Mapping[str, Any]] = None
     description: Optional[str] = None
@@ -236,7 +242,8 @@ class GoogleDriveSource:
 
     def to_create_request(self) -> JSON:
         """Return source-create request fields for this Google Drive source."""
-        config: JSON = {"auth_mode": self.auth_mode, "sync_mode": self.sync_mode}
+        config: JSON = {"auth_mode": self.auth_mode}
+        _set_optional(config, "sync_mode", self.sync_mode)
         _set_optional_sequence(config, "folder_ids", self.folder_ids)
         _set_optional_sequence(config, "file_ids", self.file_ids)
         _set_optional(config, "include_shared_drives", self.include_shared_drives)
@@ -298,7 +305,11 @@ class FileUploadSource:
 
 @dataclass(frozen=True)
 class JiraSource:
-    """Jira ingestion source. ``include_comments`` defaults to true."""
+    """Jira ingestion source.
+
+    ``include_comments`` defaults to true. ``sync_mode`` is omitted from the
+    request when ``None`` so the server applies its default (``"incremental"``).
+    """
 
     name: Optional[str] = None
     cloud_id: str = ""
@@ -306,7 +317,7 @@ class JiraSource:
     project_keys: Optional[Sequence[str]] = None
     jql: Optional[str] = None
     include_comments: bool = True
-    sync_mode: str = "full"
+    sync_mode: Optional[str] = None
     description: Optional[str] = None
     metadata: Optional[Mapping[str, Any]] = None
     config_extra: Optional[Mapping[str, Any]] = None
@@ -317,8 +328,8 @@ class JiraSource:
         config: JSON = {
             "cloud_id": self.cloud_id,
             "include_comments": self.include_comments,
-            "sync_mode": self.sync_mode,
         }
+        _set_optional(config, "sync_mode", self.sync_mode)
         _set_optional(config, "access_token", self.access_token)
         _set_optional_sequence(config, "project_keys", self.project_keys)
         _set_optional(config, "jql", self.jql)
@@ -333,8 +344,82 @@ class JiraSource:
         )
 
 
+@dataclass(frozen=True)
+class ConfluenceSource:
+    """Confluence ingestion source.
+
+    Confluence spaces and pages from an Atlassian Cloud site. Provide either
+    ``cloud_id`` (Atlassian OAuth cloud/site id) or ``base_url`` (e.g.
+    ``"https://company.atlassian.net"``). For basic auth, set ``username`` and
+    ``api_token``; for OAuth, set ``oauth_credentials``.
+
+    Args:
+        name: Source name. Defaults to ``confluence-{cloud-id-or-host}``.
+        cloud_id: Atlassian OAuth cloud/site id. Required unless ``base_url`` set.
+        base_url: Atlassian site base URL. Required unless ``cloud_id`` set.
+        auth_mode: Auth mode. Defaults to ``"basic"``.
+        username: Optional basic-auth username (typically an account email).
+        api_token: Optional basic-auth API token.
+        oauth_credentials: Optional Atlassian OAuth credential payload.
+        spaces: Optional space keys to ingest. Empty means all accessible spaces.
+        include_attachments: Whether to ingest attachments. Defaults to ``False``.
+        sync_mode: Optional sync mode. Omitted from the request when ``None`` so
+            the server applies its default (``"incremental"``).
+        description: Optional source description.
+        metadata: Optional source metadata.
+        config_extra: Optional extra config fields merged into the request.
+    """
+
+    name: Optional[str] = None
+    cloud_id: Optional[str] = None
+    base_url: Optional[str] = None
+    auth_mode: str = "basic"
+    username: Optional[str] = None
+    api_token: Optional[str] = None
+    oauth_credentials: Optional[Mapping[str, Any]] = None
+    spaces: Optional[Sequence[str]] = None
+    include_attachments: bool = False
+    sync_mode: Optional[str] = None
+    description: Optional[str] = None
+    metadata: Optional[Mapping[str, Any]] = None
+    config_extra: Optional[Mapping[str, Any]] = None
+
+    def to_create_request(self) -> JSON:
+        """Return source-create request fields for this Confluence source."""
+        if not self.cloud_id and not self.base_url:
+            raise ValueError("ConfluenceSource requires cloud_id or base_url.")
+        config: JSON = {
+            "auth_mode": self.auth_mode,
+            "include_attachments": self.include_attachments,
+        }
+        _set_optional(config, "cloud_id", self.cloud_id)
+        _set_optional(config, "base_url", self.base_url)
+        _set_optional(config, "username", self.username)
+        _set_optional(config, "api_token", self.api_token)
+        if self.oauth_credentials is not None:
+            config["oauth_credentials"] = dict(self.oauth_credentials)
+        _set_optional_sequence(config, "spaces", self.spaces)
+        _set_optional(config, "sync_mode", self.sync_mode)
+        _merge_extra(config, self.config_extra)
+        hint = self.cloud_id or _confluence_host_hint(self.base_url)
+        return _source_body(
+            name=self.name or _default_source_name("confluence", hint),
+            source_type="confluence",
+            config=config,
+            description=self.description,
+            metadata=self.metadata,
+        )
+
+
 TypedSource = Union[
-    GenericSource, WebSource, S3Source, GCSSource, GoogleDriveSource, FileUploadSource, JiraSource
+    GenericSource,
+    WebSource,
+    S3Source,
+    GCSSource,
+    GoogleDriveSource,
+    FileUploadSource,
+    JiraSource,
+    ConfluenceSource,
 ]
 SourceInput = Union[str, TypedSource]
 
@@ -371,6 +456,13 @@ def _default_google_drive_source_name(
     elif file_ids:
         hint = file_ids[0]
     return _default_source_name("gdrive", hint)
+
+
+def _confluence_host_hint(base_url: Optional[str]) -> Optional[str]:
+    if not base_url:
+        return None
+    parsed = urlparse(base_url)
+    return parsed.netloc or parsed.path or base_url
 
 
 def _default_source_name(source_type: str, hint: Optional[str] = None) -> str:

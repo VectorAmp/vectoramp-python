@@ -10,6 +10,7 @@ from typing import Any, Iterator, Mapping, Optional, Sequence, Union
 
 from .embeddings import EMBEDDING_DIMENSIONS, VECTORAMP_EMBEDDING_4B
 from .sources import (
+    ConfluenceSource,
     FileUploadSource,
     GCSSource,
     GoogleDriveSource,
@@ -20,7 +21,7 @@ from .sources import (
     WebSource,
 )
 from .transport import BaseTransport, RestTransport
-from .types import JSON, AdvancedFilter, ConversationTurn, Filters, Metric, Vector
+from .types import JSON, AdvancedFilter, ConversationTurn, Filters, Metric, Vector, VectorId
 
 PathLike = Union[str, Path]
 
@@ -140,14 +141,15 @@ class Dataset:
         self,
         texts: Union[str, Sequence[str]],
         *,
-        ids: Optional[Sequence[str]] = None,
+        ids: Optional[Sequence[VectorId]] = None,
         metadatas: Optional[Sequence[Mapping[str, Any]]] = None,
     ) -> JSON:
         """Embed text values with the dataset model and insert them.
 
         Args:
             texts: Single text or sequence of texts.
-            ids: Optional vector ids. Length must match ``texts`` when provided.
+            ids: Optional vector ids (string or integer). Integer ids are kept as
+                JSON numbers. Length must match ``texts`` when provided.
             metadatas: Optional per-text metadata. Length must match ``texts``.
 
         Returns:
@@ -356,6 +358,7 @@ class DatasetsResource:
         embedding: Optional[Mapping[str, str]] = None,
         embedding_provider: str = "vectoramp",
         embedding_model: str = VECTORAMP_EMBEDDING_4B,
+        hybrid: bool = False,
         filters: Optional[Mapping[str, Any]] = None,
         metadata_schema: Optional[Mapping[str, Any]] = None,
         tuning: Optional[Mapping[str, Any]] = None,
@@ -363,7 +366,9 @@ class DatasetsResource:
         """Create a SABLE dataset.
 
         ``index_type`` is intentionally not exposed; the SDK always requests
-        SABLE.
+        SABLE. The only required argument is ``name``; everything else is
+        inferred or defaulted (``VectorAmp-Embedding-4B`` at ``dim=2560``,
+        ``metric="cosine"``).
 
         Args:
             name: Dataset name.
@@ -374,6 +379,8 @@ class DatasetsResource:
             embedding_provider: Embedding provider. Defaults to ``"vectoramp"``.
             embedding_model: Embedding model. Defaults to
                 ``"VectorAmp-Embedding-4B"``.
+            hybrid: Enable hybrid dense + sparse indexing. Sends ``hybrid: true``
+                in the create body when set. Defaults to ``False``.
             filters: Optional filter schema/configuration.
             metadata_schema: Optional metadata schema.
             tuning: Optional SABLE tuning parameters.
@@ -395,6 +402,8 @@ class DatasetsResource:
             "embedding": embedding_config,
             "index_type": "sable",
         }
+        if hybrid:
+            body["hybrid"] = True
         if filters is not None:
             body["filters"] = dict(filters)
         if metadata_schema is not None:
@@ -596,7 +605,7 @@ class DatasetsResource:
         dataset_id: str,
         texts: Union[str, Sequence[str]],
         *,
-        ids: Optional[Sequence[str]] = None,
+        ids: Optional[Sequence[VectorId]] = None,
         metadatas: Optional[Sequence[Mapping[str, Any]]] = None,
     ) -> JSON:
         """Embed text values with the dataset model and insert them.
@@ -604,7 +613,9 @@ class DatasetsResource:
         Args:
             dataset_id: Dataset identifier.
             texts: Single text or sequence of texts.
-            ids: Optional vector ids. Length must match ``texts`` when provided.
+            ids: Optional vector ids (string or integer). Integer ids are kept as
+                JSON numbers rather than coerced to strings. Length must match
+                ``texts`` when provided.
             metadatas: Optional per-text metadata. Length must match ``texts``.
 
         Returns:
@@ -622,9 +633,12 @@ class DatasetsResource:
         for index, (text, values) in enumerate(zip(text_list, embeddings)):
             metadata = dict(metadatas[index]) if metadatas is not None else {}
             metadata.setdefault("text", text)
+            # Provided ids pass through verbatim so integer ids stay JSON numbers;
+            # only auto-generated ids are strings (UUIDs).
+            vector_id: VectorId = ids[index] if ids is not None else str(uuid.uuid4())
             vectors.append(
                 {
-                    "id": ids[index] if ids is not None else str(uuid.uuid4()),
+                    "id": vector_id,
                     "values": values,
                     "metadata": metadata,
                 }
@@ -760,7 +774,7 @@ class IngestionResource:
         name: Optional[str] = None,
         region: str = "us-east-1",
         prefix: Optional[str] = None,
-        sync_mode: str = "full",
+        sync_mode: Optional[str] = None,
         access_key_id: Optional[str] = None,
         secret_access_key: Optional[str] = None,
         role_arn: Optional[str] = None,
@@ -774,8 +788,9 @@ class IngestionResource:
         """Create an Amazon S3 source.
 
         ``name`` defaults to ``s3-{bucket}``; ``region`` defaults to
-        ``"us-east-1"`` and ``sync_mode`` defaults to ``"full"``. Optional
-        credentials and file settings are omitted when ``None``.
+        ``"us-east-1"``. ``sync_mode`` is omitted when ``None`` so the server
+        applies its default (``"incremental"``). Optional credentials and file
+        settings are omitted when ``None``.
 
         Returns:
             Created source JSON.
@@ -807,14 +822,18 @@ class IngestionResource:
         prefix: Optional[str] = None,
         project_id: Optional[str] = None,
         credentials_json: Optional[Mapping[str, Any]] = None,
-        sync_mode: str = "full",
+        sync_mode: Optional[str] = None,
         file_patterns: Optional[Sequence[str]] = None,
         max_file_size_mb: Optional[int] = None,
         description: Optional[str] = None,
         metadata: Optional[Mapping[str, Any]] = None,
         config_extra: Optional[Mapping[str, Any]] = None,
     ) -> JSON:
-        """Create a Google Cloud Storage source."""
+        """Create a Google Cloud Storage source.
+
+        ``sync_mode`` is omitted when ``None`` so the server applies its default
+        (``"incremental"``).
+        """
         return self.create_source(
             GCSSource(
                 name=name,
@@ -840,12 +859,16 @@ class IngestionResource:
         project_keys: Optional[Sequence[str]] = None,
         jql: Optional[str] = None,
         include_comments: bool = True,
-        sync_mode: str = "full",
+        sync_mode: Optional[str] = None,
         description: Optional[str] = None,
         metadata: Optional[Mapping[str, Any]] = None,
         config_extra: Optional[Mapping[str, Any]] = None,
     ) -> JSON:
-        """Create a Jira source. ``include_comments`` defaults to true."""
+        """Create a Jira source.
+
+        ``include_comments`` defaults to true. ``sync_mode`` is omitted when
+        ``None`` so the server applies its default (``"incremental"``).
+        """
         return self.create_source(
             JiraSource(
                 name=name,
@@ -854,6 +877,52 @@ class IngestionResource:
                 project_keys=project_keys,
                 jql=jql,
                 include_comments=include_comments,
+                sync_mode=sync_mode,
+                description=description,
+                metadata=metadata,
+                config_extra=config_extra,
+            )
+        )
+
+    def create_confluence(
+        self,
+        *,
+        cloud_id: Optional[str] = None,
+        base_url: Optional[str] = None,
+        name: Optional[str] = None,
+        auth_mode: str = "basic",
+        username: Optional[str] = None,
+        api_token: Optional[str] = None,
+        oauth_credentials: Optional[Mapping[str, Any]] = None,
+        spaces: Optional[Sequence[str]] = None,
+        include_attachments: bool = False,
+        sync_mode: Optional[str] = None,
+        description: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+        config_extra: Optional[Mapping[str, Any]] = None,
+    ) -> JSON:
+        """Create a Confluence source.
+
+        Provide either ``cloud_id`` or ``base_url``. ``auth_mode`` defaults to
+        ``"basic"`` (set ``username``/``api_token``); use ``oauth_credentials``
+        for OAuth. ``include_attachments`` defaults to ``False``. ``sync_mode``
+        is omitted when ``None`` so the server applies its default
+        (``"incremental"``).
+
+        Returns:
+            Created source JSON.
+        """
+        return self.create_source(
+            ConfluenceSource(
+                name=name,
+                cloud_id=cloud_id,
+                base_url=base_url,
+                auth_mode=auth_mode,
+                username=username,
+                api_token=api_token,
+                oauth_credentials=oauth_credentials,
+                spaces=spaces,
+                include_attachments=include_attachments,
                 sync_mode=sync_mode,
                 description=description,
                 metadata=metadata,
@@ -870,7 +939,7 @@ class IngestionResource:
         auth_mode: str = "oauth",
         oauth_credentials: Optional[Mapping[str, Any]] = None,
         include_shared_drives: Optional[bool] = None,
-        sync_mode: str = "full",
+        sync_mode: Optional[str] = None,
         service_account_json: Optional[Mapping[str, Any]] = None,
         credentials_json: Optional[Mapping[str, Any]] = None,
         description: Optional[str] = None,
@@ -880,8 +949,9 @@ class IngestionResource:
         """Create a Google Drive source.
 
         ``name`` defaults to ``gdrive-{first-folder-or-file-id}`` or ``gdrive``.
-        ``auth_mode`` defaults to ``"oauth"`` and ``sync_mode`` to ``"full"``.
-        Optional auth/config values are omitted when ``None``.
+        ``auth_mode`` defaults to ``"oauth"``. ``sync_mode`` is omitted when
+        ``None`` so the server applies its default (``"incremental"``). Optional
+        auth/config values are omitted when ``None``.
 
         Returns:
             Created source JSON.
@@ -1328,6 +1398,10 @@ class IntelligenceResource:
     def get_session(self, session_id: str) -> JSON:
         """Fetch one persistent Intelligence session."""
         return self._transport.request("GET", f"/intelligence/sessions/{session_id}")
+
+    def delete_session(self, session_id: str) -> JSON:
+        """Delete a persistent Intelligence session."""
+        return self._transport.request("DELETE", f"/intelligence/sessions/{session_id}")
 
     def append_message(
         self,

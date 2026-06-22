@@ -8,11 +8,12 @@ version = "0.1.0"
 description = "Python SDK for the VectorAmp API"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
-authors = [{ name = "VectorAmp" }]
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "VectorAmp, Inc." }]
 keywords = ["vectoramp", "vector database", "rag", "sable"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.9",
@@ -34,7 +35,8 @@ dev = [
 [project.urls]
 Homepage = "https://vectoramp.com"
 Documentation = "https://docs.vectoramp.com"
-Repository = "https://gitlab.com/VectorAmp/SDK/Python"
+Repository = "https://github.com/vectoramp/vectoramp-python"
+"Bug Tracker" = "https://github.com/vectoramp/vectoramp-python/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vectoramp"]
