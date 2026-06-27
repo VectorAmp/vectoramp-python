@@ -181,6 +181,7 @@ class GCSSource:
     sync_mode: Optional[str] = None
     file_patterns: Optional[Sequence[str]] = None
     max_file_size_mb: Optional[int] = None
+    connection_id: Optional[str] = None
     description: Optional[str] = None
     metadata: Optional[Mapping[str, Any]] = None
     config_extra: Optional[Mapping[str, Any]] = None
@@ -196,6 +197,7 @@ class GCSSource:
             config["credentials_json"] = dict(self.credentials_json)
         _set_optional_sequence(config, "file_patterns", self.file_patterns)
         _set_optional(config, "max_file_size_mb", self.max_file_size_mb)
+        _set_optional(config, "connection_id", self.connection_id)
         _merge_extra(config, self.config_extra)
         return _source_body(
             name=self.name or _default_source_name("gcs", self.bucket),
@@ -222,6 +224,8 @@ class GoogleDriveSource:
             the server applies its default (``"incremental"``).
         service_account_json: Optional service-account credential payload.
         credentials_json: Optional generic credential payload.
+        connection_id: Optional id of a stored OAuth connection (see
+            ``client.connections``) to authorize the source with.
         description: Optional source description.
         metadata: Optional source metadata.
         config_extra: Optional extra config fields merged into the request.
@@ -236,6 +240,7 @@ class GoogleDriveSource:
     sync_mode: Optional[str] = None
     service_account_json: Optional[Mapping[str, Any]] = None
     credentials_json: Optional[Mapping[str, Any]] = None
+    connection_id: Optional[str] = None
     description: Optional[str] = None
     metadata: Optional[Mapping[str, Any]] = None
     config_extra: Optional[Mapping[str, Any]] = None
@@ -253,6 +258,7 @@ class GoogleDriveSource:
             config["service_account_json"] = dict(self.service_account_json)
         if self.credentials_json is not None:
             config["credentials_json"] = dict(self.credentials_json)
+        _set_optional(config, "connection_id", self.connection_id)
         _merge_extra(config, self.config_extra)
         return _source_body(
             name=self.name or _default_google_drive_source_name(self.folder_ids, self.file_ids),
@@ -318,6 +324,7 @@ class JiraSource:
     jql: Optional[str] = None
     include_comments: bool = True
     sync_mode: Optional[str] = None
+    connection_id: Optional[str] = None
     description: Optional[str] = None
     metadata: Optional[Mapping[str, Any]] = None
     config_extra: Optional[Mapping[str, Any]] = None
@@ -333,6 +340,7 @@ class JiraSource:
         _set_optional(config, "access_token", self.access_token)
         _set_optional_sequence(config, "project_keys", self.project_keys)
         _set_optional(config, "jql", self.jql)
+        _set_optional(config, "connection_id", self.connection_id)
         _merge_extra(config, self.config_extra)
         hint = self.project_keys[0] if self.project_keys else self.cloud_id
         return _source_body(
@@ -365,6 +373,8 @@ class ConfluenceSource:
         include_attachments: Whether to ingest attachments. Defaults to ``False``.
         sync_mode: Optional sync mode. Omitted from the request when ``None`` so
             the server applies its default (``"incremental"``).
+        connection_id: Optional id of a stored OAuth connection (see
+            ``client.connections``) to authorize the source with.
         description: Optional source description.
         metadata: Optional source metadata.
         config_extra: Optional extra config fields merged into the request.
@@ -380,6 +390,7 @@ class ConfluenceSource:
     spaces: Optional[Sequence[str]] = None
     include_attachments: bool = False
     sync_mode: Optional[str] = None
+    connection_id: Optional[str] = None
     description: Optional[str] = None
     metadata: Optional[Mapping[str, Any]] = None
     config_extra: Optional[Mapping[str, Any]] = None
@@ -400,6 +411,7 @@ class ConfluenceSource:
             config["oauth_credentials"] = dict(self.oauth_credentials)
         _set_optional_sequence(config, "spaces", self.spaces)
         _set_optional(config, "sync_mode", self.sync_mode)
+        _set_optional(config, "connection_id", self.connection_id)
         _merge_extra(config, self.config_extra)
         hint = self.cloud_id or _confluence_host_hint(self.base_url)
         return _source_body(

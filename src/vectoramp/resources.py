@@ -681,6 +681,89 @@ class IngestionResource:
         """Return one ingestion source by id."""
         return self._transport.request("GET", f"/ingestion/sources/{source_id}")
 
+    def delete_source(self, source_id: str, *, force: bool = False) -> Any:
+        """Delete an ingestion source.
+
+        Args:
+            source_id: Source identifier.
+            force: When ``True``, delete even if the source is still referenced by
+                schedules or jobs (sends ``?force=true``). Defaults to ``False``.
+
+        Returns:
+            API response, or ``None`` for a ``204`` response.
+        """
+        params = {"force": "true"} if force else None
+        return self._transport.request(
+            "DELETE", f"/ingestion/sources/{source_id}", params=params
+        )
+
+    def list_unused_sources(self, *, limit: int = 50, offset: int = 0) -> JSON:
+        """List sources not referenced by any schedule or job.
+
+        Args:
+            limit: Maximum sources to return. Defaults to ``50``.
+            offset: Pagination offset. Defaults to ``0``.
+
+        Returns:
+            Source page JSON from ``/ingestion/sources/unused``.
+        """
+        return self._transport.request(
+            "GET", "/ingestion/sources/unused", params={"limit": limit, "offset": offset}
+        )
+
+    def cleanup_unused_sources(self) -> JSON:
+        """Delete every source not referenced by a schedule or job.
+
+        Returns:
+            ``{"deleted": [...], "count": int}`` describing the removed sources.
+        """
+        return self._transport.request("POST", "/ingestion/sources/cleanup")
+
+    def get_source_references(self, source_id: str) -> JSON:
+        """Return the schedules and jobs that reference a source.
+
+        Args:
+            source_id: Source identifier.
+
+        Returns:
+            Reference JSON from ``/ingestion/sources/{id}/references``.
+        """
+        return self._transport.request("GET", f"/ingestion/sources/{source_id}/references")
+
+    def validate_source(
+        self,
+        source: Optional[SourceBuilder] = None,
+        *,
+        source_type: Optional[str] = None,
+        config: Optional[Mapping[str, Any]] = None,
+    ) -> JSON:
+        """Validate a source configuration without creating it.
+
+        Accepts either a source builder (its ``source_type`` and ``config`` are
+        derived from ``to_create_request``) or explicit ``source_type`` and
+        ``config`` keyword arguments.
+
+        Args:
+            source: Optional source builder such as ``WebSource`` or ``S3Source``.
+            source_type: Source type when not passing ``source``.
+            config: Source config when not passing ``source``.
+
+        Returns:
+            Validation response JSON from ``/ingestion/sources/validate``.
+        """
+        if source is not None:
+            request = source.to_create_request()
+            body = {"source_type": request["source_type"], "config": request["config"]}
+        else:
+            if source_type is None or config is None:
+                raise TypeError(
+                    "validate_source requires source or both source_type and config."
+                )
+            body = {"source_type": source_type, "config": dict(config)}
+        return self._transport.request(
+            "POST", "/ingestion/sources/validate", json_body=body
+        )
+
     def create_source(
         self,
         source: Optional[SourceBuilder] = None,
