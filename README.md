@@ -1,3 +1,13 @@
+<div align="center">
+  <a href="https://vectoramp.com/">
+    <picture>
+      <source media="(prefers-color-scheme: light)" srcset=".github/images/logo-full-light.svg">
+      <source media="(prefers-color-scheme: dark)" srcset=".github/images/logo-full-dark.svg">
+      <img alt="VectorAmp Logo" src=".github/images/logo-full-dark.svg" width="50%">
+    </picture>
+  </a>
+</div>
+
 # VectorAmp Python SDK
 
 Python client for the VectorAmp API. It is package-ready, typed, and defaults to `https://api.vectoramp.com`.
