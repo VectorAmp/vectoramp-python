@@ -57,7 +57,7 @@ client = VectorAmp(api_key="va_...", base_url="http://localhost:8080")
 
 ## Datasets
 
-Dataset creation always requests the SABLE index. The SDK intentionally does **not** expose an `index_type` option. Built-in helpers infer dimensions for VectorAmp 4B and OpenAI `text-embedding-3-small`/`text-embedding-3-large`.
+Dataset creation always requests the SABLE index. The SDK intentionally does **not** expose an `index_type` option. For normal use, omit embedding config and VectorAmp uses the managed `VectorAmp-Embedding-4B` model with inferred dim `2560`. Built-in helpers also infer dimensions for optional OpenAI BYOM models.
 
 The only required argument is `name`. The default embedding is `VectorAmp-Embedding-4B` (`dim=2560`, `metric="cosine"`):
 
@@ -73,13 +73,13 @@ Enable hybrid (dense + sparse) indexing with `hybrid=True`:
 dataset = client.datasets.create("product-docs", hybrid=True)
 ```
 
-Bring your own embedding model with the `openai` helper (dimension is inferred):
+Optional BYOM: use the `openai` helper only when you intentionally want an OpenAI embedding model (dimension is inferred):
 
 ```python
 from vectoramp import openai
 
 dataset = client.datasets.create(
-    "product-docs",
+    "openai-docs",
     embedding=openai("small"),  # or openai("large")
 )
 ```
