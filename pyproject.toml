@@ -35,8 +35,8 @@ dev = [
 [project.urls]
 Homepage = "https://vectoramp.com"
 Documentation = "https://docs.vectoramp.com"
-Repository = "https://github.com/vectoramp/vectoramp-python"
-"Bug Tracker" = "https://github.com/vectoramp/vectoramp-python/issues"
+Repository = "https://github.com/VectorAmp/vectoramp-python"
+"Bug Tracker" = "https://github.com/VectorAmp/vectoramp-python/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vectoramp"]

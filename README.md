@@ -23,7 +23,7 @@ pip install vectoramp
 For local development:
 
 ```bash
-git clone https://github.com/vectoramp/vectoramp-python.git
+git clone https://github.com/VectorAmp/vectoramp-python.git
 cd vectoramp-python
 pip install -e '.[dev]'
 pytest
