@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import mimetypes
 import uuid
-from urllib.parse import quote
 from collections.abc import ItemsView, KeysView, ValuesView
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Optional, Sequence, Union
+from urllib.parse import quote
 
 from .embeddings import (
     EMBEDDING_DIMENSIONS,
