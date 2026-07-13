@@ -84,6 +84,21 @@ dataset = client.datasets.create(
 )
 ```
 
+To save or rotate the OpenAI API key as an organization secret first, then
+create the dataset with `embedding.secret_ref`, use the helper:
+
+```python
+dataset = client.datasets.create_openai(
+    name="product-docs",
+    api_key="sk-...",
+    secret_ref="emb:openai:api_key",  # default
+)
+
+# Or upsert the secret directly.
+client.secrets.put_openai_api_key("sk-...")
+client.org_secrets.update("emb:openai:api_key", "sk-rotated")
+```
+
 For a custom/unknown model you must pass `dim` explicitly:
 
 ```python
@@ -152,6 +167,13 @@ dataset.add_texts(
     ids=["sable-note"],
     metadatas=[{"source": "readme"}],
 )
+```
+
+Delete vectors by id:
+
+```python
+dataset.delete_vectors(["doc-001", 42])
+client.datasets.delete_vectors(dataset_id, ["doc-001", 42])
 ```
 
 ## Search
@@ -382,13 +404,14 @@ listed first; optional arguments show their default.
 
 ### Datasets (`client.datasets` / `Dataset`)
 
-- `create(name, *, dim=None, metric="cosine", embedding=None, embedding_provider="vectoramp", embedding_model="VectorAmp-Embedding-4B", hybrid=False, filters=None, metadata_schema=None, tuning=None)` → `Dataset`. Always SABLE. `dim` inferred for built-in models; required for custom models.
+- `create(name, *, dim=None, metric="cosine", embedding=None, embedding_provider="vectoramp", embedding_model="VectorAmp-Embedding-4B", hybrid=False, filters=None, metadata_schema=None, tuning=None, openai_api_key=None, openai_secret_ref="emb:openai:api_key", validate_openai_key=False)` → `Dataset`. Always SABLE. `dim` inferred for built-in models; required for custom models.
 - `list(*, limit=50, offset=0)` → page with `Dataset` objects.
 - `get(dataset_id)` → `Dataset`.
 - `delete(dataset_id)` / `dataset.delete()`.
 - `stats(dataset_id)` / `dataset.stats()`.
 - `search(dataset_id, query=None, *, vector=None, text=None, search_text=None, top_k=10, filters=None, advanced_filters=None, embedding_provider=None, embedding_model=None, nprobe_override=None, rerank_depth_override=None, hybrid=None, sparse_query=None, alpha=None, include_embeddings=None, include_documents=None, include_metadata=None, rerank=None)` / `dataset.search(…)`. `query` accepts a string (text) or float sequence (vector); `top_k` defaults to 10.
 - `insert(dataset_id, vectors)` and `insert_vectors(dataset_id, vectors)` / `dataset.insert(vectors)`. Record `id` may be `str` or `int` (integers stay JSON numbers).
+- `delete_vectors(dataset_id, ids, *, write_concern=None)` / `dataset.delete_vectors(ids)`.
 - `embed(dataset_id, *, text=None, texts=None)` / `dataset.embed(…)`.
 - `add_texts(dataset_id, texts, *, ids=None, metadatas=None)` / `dataset.add_texts(texts, …)`. Single string or list; ids auto-generated when omitted; copies the text into `metadata.text`.
 - `list_documents(dataset_id, *, limit=50, cursor=None, status=None)` / `dataset.list_documents(…)`.

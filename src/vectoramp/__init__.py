@@ -10,7 +10,7 @@ from .embeddings import (
     openai,
 )
 from .exceptions import APIError, AuthenticationError, VectorAmpError
-from .resources import Dataset
+from .resources import Dataset, OrgSecretsResource
 from .sources import (
     ConfluenceSource,
     FileUploadSource,
@@ -36,6 +36,7 @@ __all__ = [
     "JiraSource",
     "OPENAI_TEXT_EMBEDDING_3_LARGE",
     "OPENAI_TEXT_EMBEDDING_3_SMALL",
+    "OrgSecretsResource",
     "S3Source",
     "VectorAmp",
     "VECTORAMP_EMBEDDING_4B",
