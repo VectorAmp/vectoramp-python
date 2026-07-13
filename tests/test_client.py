@@ -154,14 +154,9 @@ def test_dataset_create_openai_stores_secret_then_uses_secret_ref() -> None:
     assert dataset.id == "ds_openai"
     assert calls == [
         (
-            "POST",
-            "/org-secrets/emb%3Aopenai%3Aapi_key",
-            {
-                "api_key": "sk-test",
-                "secret_ref": "emb:openai:customer-a",
-                "validate": True,
-                "model": "text-embedding-3-small",
-            },
+            "PUT",
+            "/org-secrets/emb:openai:customer-a",
+            {"value": "sk-test"},
         ),
         (
             "POST",
@@ -192,9 +187,8 @@ def test_org_secrets_put_update_openai_key() -> None:
     assert client.secrets.put("emb:openai:api_key", "sk-new") is None
     assert client.org_secrets.update("emb:openai:api_key", "sk-rotated") is None
 
-    assert calls[0]["api_key"] == "sk-new"
-    assert calls[0]["secret_ref"] == "emb:openai:api_key"
-    assert calls[1]["api_key"] == "sk-rotated"
+    assert calls[0]["value"] == "sk-new"
+    assert calls[1]["value"] == "sk-rotated"
 
 
 def test_delete_vectors_payload_and_dataset_helper() -> None:
