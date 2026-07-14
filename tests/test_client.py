@@ -133,6 +133,96 @@ def test_dataset_create_openai_helper_infers_dimension() -> None:
     }
 
 
+def test_dataset_create_openai_stores_secret_then_uses_secret_ref() -> None:
+    calls: list[tuple[str, str, dict[str, Any]]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content) if request.content else {}
+        calls.append((request.method, request.url.path, body))
+        if request.url.path == "/org-secrets/emb%3Aopenai%3Aapi_key":
+            return httpx.Response(204)
+        return json_response({"id": "ds_openai", "index_type": "sable"}, 201)
+
+    client = make_client(handler)
+    dataset = client.datasets.create_openai(
+        name="openai-docs",
+        api_key="sk-test",
+        secret_ref="emb:openai:customer-a",
+        validate=True,
+    )
+
+    assert dataset.id == "ds_openai"
+    assert calls == [
+        (
+            "PUT",
+            "/org-secrets/emb:openai:customer-a",
+            {"value": "sk-test"},
+        ),
+        (
+            "POST",
+            "/datasets",
+            {
+                "name": "openai-docs",
+                "dim": 1536,
+                "metric": "cosine",
+                "embedding": {
+                    "provider": "openai",
+                    "model": "text-embedding-3-small",
+                    "secret_ref": "emb:openai:customer-a",
+                },
+                "index_type": "sable",
+            },
+        ),
+    ]
+
+
+def test_org_secrets_put_update_openai_key() -> None:
+    calls: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(json.loads(request.content))
+        return httpx.Response(204)
+
+    client = make_client(handler)
+    assert client.secrets.put("emb:openai:api_key", "sk-new") is None
+    assert client.org_secrets.update("emb:openai:api_key", "sk-rotated") is None
+
+    assert calls[0]["value"] == "sk-new"
+    assert calls[1]["value"] == "sk-rotated"
+
+
+def test_delete_vectors_payload_and_dataset_helper() -> None:
+    calls: list[tuple[str, str, dict[str, Any]]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content) if request.content else {}
+        calls.append((request.method, request.url.path, body))
+        return json_response({"deleted": 2, "ids": body.get("ids", [])})
+
+    client = make_client(handler)
+    result = client.datasets.delete_vectors(
+        "ds_1", ["vec-a", 42], write_concern={"wait": True}
+    )
+    dataset = Dataset(client.datasets, {"id": "ds_1"})
+    dataset.delete_vectors(["vec-c"])
+
+    assert result["deleted"] == 2
+    assert calls == [
+        (
+            "DELETE",
+            "/api/v1/datasets/ds_1/vectors",
+            {"ids": ["vec-a", 42], "write_concern": {"wait": True}},
+        ),
+        ("DELETE", "/api/v1/datasets/ds_1/vectors", {"ids": ["vec-c"]}),
+    ]
+
+
+def test_delete_vectors_requires_ids() -> None:
+    client = make_client(lambda request: json_response({}))
+    with pytest.raises(ValueError):
+        client.datasets.delete_vectors("ds_1", [])
+
+
 def test_list_get_delete_and_stats() -> None:
     calls = []
 

@@ -7,8 +7,15 @@ import uuid
 from collections.abc import ItemsView, KeysView, ValuesView
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Optional, Sequence, Union
+from urllib.parse import quote
 
-from .embeddings import EMBEDDING_DIMENSIONS, VECTORAMP_EMBEDDING_4B
+from .embeddings import (
+    EMBEDDING_DIMENSIONS,
+    OPENAI_TEXT_EMBEDDING_3_SMALL,
+    VECTORAMP_EMBEDDING_4B,
+    OpenAIEmbeddingSize,
+    openai,
+)
 from .sources import (
     ConfluenceSource,
     FileUploadSource,
@@ -136,6 +143,15 @@ class Dataset:
             Insert response JSON.
         """
         return self.service.insert_vectors(self.id, vectors)
+
+    def delete_vectors(
+        self,
+        ids: Sequence[VectorId],
+        *,
+        write_concern: Optional[Mapping[str, Any]] = None,
+    ) -> JSON:
+        """Delete vectors from this dataset by id."""
+        return self.service.delete_vectors(self.id, ids, write_concern=write_concern)
 
     def add_texts(
         self,
@@ -362,6 +378,9 @@ class DatasetsResource:
         filters: Optional[Mapping[str, Any]] = None,
         metadata_schema: Optional[Mapping[str, Any]] = None,
         tuning: Optional[Mapping[str, Any]] = None,
+        openai_api_key: Optional[str] = None,
+        openai_secret_ref: str = "emb:openai:api_key",
+        validate_openai_key: bool = False,
     ) -> Dataset:
         """Create a SABLE dataset.
 
@@ -384,13 +403,38 @@ class DatasetsResource:
             filters: Optional filter schema/configuration.
             metadata_schema: Optional metadata schema.
             tuning: Optional SABLE tuning parameters.
+            openai_api_key: Optional OpenAI API key to store as an organization
+                secret before creating the dataset. When provided, and no
+                explicit embedding is passed, the dataset uses OpenAI
+                ``text-embedding-3-small`` with ``secret_ref`` set to
+                ``openai_secret_ref``.
+            openai_secret_ref: Organization-secret name used for the OpenAI key.
+            validate_openai_key: Ask the API to validate the OpenAI key before
+                storing it. Defaults to ``False``.
 
         Returns:
             Created ``Dataset`` object.
         """
+        if openai_api_key is not None:
+            if self.client is None or not hasattr(self.client, "secrets"):
+                raise TypeError("openai_api_key requires a DatasetResource owned by VectorAmp.")
+            validation_model = str(
+                (embedding or {}).get("model") or OPENAI_TEXT_EMBEDDING_3_SMALL
+            )
+            self.client.secrets.put(
+                openai_secret_ref,
+                openai_api_key,
+                validate=validate_openai_key,
+                model=validation_model,
+            )
+            if embedding is None and embedding_provider == "vectoramp":
+                embedding = openai("small")
+
         embedding_config = {"provider": embedding_provider, "model": embedding_model}
         if embedding is not None:
             embedding_config.update(dict(embedding))
+        if openai_api_key is not None and embedding_config.get("provider") == "openai":
+            embedding_config["secret_ref"] = openai_secret_ref
         resolved_dim = dim or EMBEDDING_DIMENSIONS.get(str(embedding_config.get("model")))
         if resolved_dim is None:
             raise ValueError("dim is required for custom embedding models")
@@ -411,6 +455,38 @@ class DatasetsResource:
         if tuning is not None:
             body["tuning"] = dict(tuning)
         return self._to_dataset(self._transport.request("POST", "/datasets", json_body=body))
+
+    def create_openai(
+        self,
+        *,
+        name: str,
+        api_key: str,
+        size: OpenAIEmbeddingSize = "small",
+        secret_ref: str = "emb:openai:api_key",
+        validate: bool = False,
+        dim: Optional[int] = None,
+        metric: Metric = "cosine",
+        hybrid: bool = False,
+        filters: Optional[Mapping[str, Any]] = None,
+        metadata_schema: Optional[Mapping[str, Any]] = None,
+        tuning: Optional[Mapping[str, Any]] = None,
+    ) -> Dataset:
+        """Store an OpenAI org secret, then create an OpenAI-backed dataset."""
+        embedding_config = openai(size)
+        embedding_config["secret_ref"] = secret_ref
+        return self.create(
+            name=name,
+            dim=dim,
+            metric=metric,
+            embedding=embedding_config,
+            hybrid=hybrid,
+            filters=filters,
+            metadata_schema=metadata_schema,
+            tuning=tuning,
+            openai_api_key=api_key,
+            openai_secret_ref=secret_ref,
+            validate_openai_key=validate,
+        )
 
     def delete(self, dataset_id: str) -> Any:
         """Delete a dataset and return the API response.
@@ -578,6 +654,23 @@ class DatasetsResource:
         """Alias for ``insert_vectors``."""
         return self.insert_vectors(dataset_id, vectors)
 
+    def delete_vectors(
+        self,
+        dataset_id: str,
+        ids: Sequence[VectorId],
+        *,
+        write_concern: Optional[Mapping[str, Any]] = None,
+    ) -> JSON:
+        """Delete vectors from a dataset by id."""
+        if not ids:
+            raise ValueError("ids must contain at least one vector id.")
+        body: JSON = {"ids": list(ids)}
+        if write_concern is not None:
+            body["write_concern"] = dict(write_concern)
+        return self._transport.request(
+            "DELETE", f"/api/v1/datasets/{dataset_id}/vectors", json_body=body
+        )
+
     def embed(
         self,
         dataset_id: str,
@@ -655,6 +748,58 @@ class DatasetsResource:
 
     def _to_dataset(self, raw_data: Mapping[str, Any]) -> Dataset:
         return Dataset(self, raw_data)
+
+
+class OrgSecretsResource:
+    """Organization secret helpers."""
+
+    def __init__(self, transport: BaseTransport) -> None:
+        self._transport = transport
+
+    def put(
+        self,
+        name: str,
+        value: str,
+        *,
+        validate: bool = False,
+        model: str = OPENAI_TEXT_EMBEDDING_3_SMALL,
+    ) -> Any:
+        """Create or update an organization secret.
+
+        Stores provider credentials through the generic organization-secret
+        REST endpoint. Plaintext is sent once and is never returned by reads.
+        """
+        if not name:
+            raise ValueError("name is required.")
+        if not value:
+            raise ValueError("value is required.")
+        return self._transport.request(
+            "PUT",
+            f"/org-secrets/{quote(name, safe='')}",
+            json_body={"value": value},
+        )
+
+    def update(
+        self,
+        name: str,
+        value: str,
+        *,
+        validate: bool = False,
+        model: str = OPENAI_TEXT_EMBEDDING_3_SMALL,
+    ) -> Any:
+        """Alias for :meth:`put`; org secrets are upserted by name."""
+        return self.put(name, value, validate=validate, model=model)
+
+    def put_openai_api_key(
+        self,
+        api_key: str,
+        *,
+        secret_ref: str = "emb:openai:api_key",
+        validate: bool = False,
+        model: str = OPENAI_TEXT_EMBEDDING_3_SMALL,
+    ) -> Any:
+        """Create or update the OpenAI API key organization secret."""
+        return self.put(secret_ref, api_key, validate=validate, model=model)
 
 
 class IngestionResource:

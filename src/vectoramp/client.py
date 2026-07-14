@@ -9,7 +9,13 @@ from typing import Iterator, Optional, Type
 import httpx
 
 from .connections import ConnectionsResource
-from .resources import DatasetsResource, IngestionResource, IntelligenceResource, SchedulesResource
+from .resources import (
+    DatasetsResource,
+    IngestionResource,
+    IntelligenceResource,
+    OrgSecretsResource,
+    SchedulesResource,
+)
 from .transport import BaseTransport, RestTransport
 from .types import JSON, ConversationTurn
 
@@ -54,6 +60,8 @@ class VectorAmp:
         self.ingestion = IngestionResource(self.transport)
         self.sources = self.ingestion
         self.connections = ConnectionsResource(self.transport)
+        self.secrets = OrgSecretsResource(self.transport)
+        self.org_secrets = self.secrets
         self.schedules = SchedulesResource(self.transport)
         self.intelligence = IntelligenceResource(self.transport)
 
