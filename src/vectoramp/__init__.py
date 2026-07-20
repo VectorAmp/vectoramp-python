@@ -21,6 +21,7 @@ from .sources import (
     S3Source,
     WebSource,
 )
+from .types import MetadataFieldType, MetadataSchema, MetadataSchemaField
 
 __all__ = [
     "APIError",
@@ -34,6 +35,9 @@ __all__ = [
     "GenericSource",
     "GoogleDriveSource",
     "JiraSource",
+    "MetadataFieldType",
+    "MetadataSchema",
+    "MetadataSchemaField",
     "OPENAI_TEXT_EMBEDDING_3_LARGE",
     "OPENAI_TEXT_EMBEDDING_3_SMALL",
     "OrgSecretsResource",

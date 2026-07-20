@@ -7,6 +7,18 @@ from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, TypedD
 JSON = Dict[str, Any]
 Metadata = Mapping[str, Any]
 Metric = Literal["cosine", "dot", "euclidean"]
+MetadataFieldType = Literal["string", "u32", "i32", "i64", "f32", "f64"]
+
+
+class MetadataSchemaField(TypedDict):
+    """A typed metadata field declared on a dataset."""
+
+    name: str
+    type: MetadataFieldType
+
+
+MetadataSchema = Sequence[MetadataSchemaField]
+MetadataSchemaInput = Union[MetadataSchema, Mapping[str, Mapping[str, Any]]]
 
 
 class EmbeddingConfig(TypedDict):
