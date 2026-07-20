@@ -99,6 +99,22 @@ client.secrets.put_openai_api_key("sk-...")
 client.org_secrets.update("emb:openai:api_key", "sk-rotated")
 ```
 
+Declare typed metadata at creation, then merge fields or replace the complete schema:
+
+```python
+from vectoramp import MetadataSchemaField
+
+schema: list[MetadataSchemaField] = [
+    {"name": "category", "type": "string"},
+    {"name": "price", "type": "f32"},
+]
+dataset = client.datasets.create(name="products", metadata_schema=schema)
+dataset.patch_metadata_schema([{"name": "inventory", "type": "u32"}])
+dataset.replace_metadata_schema(schema)  # [] removes all declared fields
+```
+
+Canonical field types are `string`, `u32`, `i32`, `i64`, `f32`, and `f64`.
+
 For a custom/unknown model you must pass `dim` explicitly:
 
 ```python
@@ -407,6 +423,8 @@ listed first; optional arguments show their default.
 - `create(name, *, dim=None, metric="cosine", embedding=None, embedding_provider="vectoramp", embedding_model="VectorAmp-Embedding-4B", hybrid=False, filters=None, metadata_schema=None, tuning=None, openai_api_key=None, openai_secret_ref="emb:openai:api_key", validate_openai_key=False)` → `Dataset`. Always SABLE. `dim` inferred for built-in models; required for custom models.
 - `list(*, limit=50, offset=0)` → page with `Dataset` objects.
 - `get(dataset_id)` → `Dataset`.
+- `patch_metadata_schema(dataset_id, schema)` / `Dataset.patch_metadata_schema(schema)` → updated `Dataset`.
+- `replace_metadata_schema(dataset_id, schema)` / `Dataset.replace_metadata_schema(schema)` → updated `Dataset`.
 - `delete(dataset_id)` / `dataset.delete()`.
 - `stats(dataset_id)` / `dataset.stats()`.
 - `search(dataset_id, query=None, *, vector=None, text=None, search_text=None, top_k=10, filters=None, advanced_filters=None, embedding_provider=None, embedding_model=None, nprobe_override=None, rerank_depth_override=None, hybrid=None, sparse_query=None, alpha=None, include_embeddings=None, include_documents=None, include_metadata=None, rerank=None)` / `dataset.search(…)`. `query` accepts a string (text) or float sequence (vector); `top_k` defaults to 10.

@@ -52,7 +52,7 @@ def test_dataset_create_forces_sable_and_auth_header() -> None:
         name="docs",
         dim=2560,
         filters={"category": "string"},
-        metadata_schema={"title": {"type": "string"}},
+        metadata_schema=[{"name": "title", "type": "string"}],
         tuning={"replicas": 1},
     )
 
@@ -64,8 +64,10 @@ def test_dataset_create_forces_sable_and_auth_header() -> None:
         "provider": "vectoramp",
         "model": "VectorAmp-Embedding-4B",
     }
+    # hybrid is not sent unless explicitly requested.
+    assert "hybrid" not in seen["body"]
     assert seen["body"]["filters"] == {"category": "string"}
-    assert seen["body"]["metadata_schema"] == {"title": {"type": "string"}}
+    assert seen["body"]["schema"] == [{"name": "title", "type": "string"}]
     assert seen["body"]["tuning"] == {"replicas": 1}
 
 
@@ -88,8 +90,31 @@ def test_dataset_create_minimal_name_only_defaults() -> None:
         "provider": "vectoramp",
         "model": "VectorAmp-Embedding-4B",
     }
-    # hybrid is not sent unless explicitly requested.
-    assert "hybrid" not in seen["body"]
+
+
+@pytest.mark.parametrize(
+    ("method_name", "mode"),
+    [("patch_metadata_schema", "merge"), ("replace_metadata_schema", "replace")],
+)
+def test_update_metadata_schema(method_name: str, mode: str) -> None:
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["url"] = str(request.url)
+        seen["body"] = json.loads(request.content)
+        return json_response({"id": "ds_1", "schema_version": 2})
+
+    client = make_client(handler)
+    schema = [{"name": "price", "type": "f32"}]
+    dataset = getattr(client.datasets, method_name)("ds_1", schema)
+
+    assert dataset.id == "ds_1"
+    assert seen == {
+        "method": "PATCH",
+        "url": "https://api.test/datasets/ds_1/schema",
+        "body": {"schema": schema, "mode": mode},
+    }
 
 
 def test_dataset_create_hybrid() -> None:

@@ -28,7 +28,16 @@ from .sources import (
     WebSource,
 )
 from .transport import BaseTransport, RestTransport
-from .types import JSON, AdvancedFilter, ConversationTurn, Filters, Metric, Vector, VectorId
+from .types import (
+    JSON,
+    AdvancedFilter,
+    ConversationTurn,
+    Filters,
+    MetadataSchema,
+    Metric,
+    Vector,
+    VectorId,
+)
 
 PathLike = Union[str, Path]
 
@@ -290,6 +299,14 @@ class Dataset:
             pipeline_id=pipeline_id,
         )
 
+    def patch_metadata_schema(self, schema: MetadataSchema) -> "Dataset":
+        """Add or update typed metadata fields while retaining other fields."""
+        return self.service.patch_metadata_schema(self.id, schema)
+
+    def replace_metadata_schema(self, schema: MetadataSchema) -> "Dataset":
+        """Replace the complete typed metadata schema."""
+        return self.service.replace_metadata_schema(self.id, schema)
+
     def get(self, key: str, default: Any = None) -> Any:
         """Return a value from the raw dataset payload, or ``default``."""
         return self.raw_data.get(key, default)
@@ -376,7 +393,7 @@ class DatasetsResource:
         embedding_model: str = VECTORAMP_EMBEDDING_4B,
         hybrid: bool = False,
         filters: Optional[Mapping[str, Any]] = None,
-        metadata_schema: Optional[Mapping[str, Any]] = None,
+        metadata_schema: Optional[MetadataSchema] = None,
         tuning: Optional[Mapping[str, Any]] = None,
         openai_api_key: Optional[str] = None,
         openai_secret_ref: str = "emb:openai:api_key",
@@ -451,7 +468,7 @@ class DatasetsResource:
         if filters is not None:
             body["filters"] = dict(filters)
         if metadata_schema is not None:
-            body["metadata_schema"] = dict(metadata_schema)
+            body["schema"] = [dict(field) for field in metadata_schema]
         if tuning is not None:
             body["tuning"] = dict(tuning)
         return self._to_dataset(self._transport.request("POST", "/datasets", json_body=body))
@@ -486,6 +503,20 @@ class DatasetsResource:
             openai_api_key=api_key,
             openai_secret_ref=secret_ref,
             validate_openai_key=validate,
+        )
+
+    def patch_metadata_schema(self, dataset_id: str, schema: MetadataSchema) -> Dataset:
+        """Add or update schema fields without removing omitted fields."""
+        body = {"schema": [dict(field) for field in schema], "mode": "merge"}
+        return self._to_dataset(
+            self._transport.request("PATCH", f"/datasets/{dataset_id}/schema", json_body=body)
+        )
+
+    def replace_metadata_schema(self, dataset_id: str, schema: MetadataSchema) -> Dataset:
+        """Replace a dataset's complete typed metadata schema."""
+        body = {"schema": [dict(field) for field in schema], "mode": "replace"}
+        return self._to_dataset(
+            self._transport.request("PATCH", f"/datasets/{dataset_id}/schema", json_body=body)
         )
 
     def delete(self, dataset_id: str) -> Any:
