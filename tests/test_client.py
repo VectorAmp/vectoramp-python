@@ -251,10 +251,10 @@ def test_delete_vectors_payload_and_dataset_helper() -> None:
     assert calls == [
         (
             "DELETE",
-            "/api/v1/datasets/ds_1/vectors",
+            "/datasets/ds_1/vectors",
             {"ids": ["vec-a", 42], "write_concern": {"wait": True}},
         ),
-        ("DELETE", "/api/v1/datasets/ds_1/vectors", {"ids": ["vec-c"]}),
+        ("DELETE", "/datasets/ds_1/vectors", {"ids": ["vec-c"]}),
     ]
 
 

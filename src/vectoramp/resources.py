@@ -710,7 +710,7 @@ class DatasetsResource:
         if write_concern is not None:
             body["write_concern"] = dict(write_concern)
         return self._transport.request(
-            "DELETE", f"/api/v1/datasets/{dataset_id}/vectors", json_body=body
+            "DELETE", f"/datasets/{dataset_id}/vectors", json_body=body
         )
 
     def embed(

@@ -157,7 +157,7 @@ class RestTransport(BaseTransport):
         return urljoin(self.base_url, path.lstrip("/"))
 
     def _headers(self, headers: Optional[Mapping[str, str]] = None) -> Dict[str, str]:
-        merged = {"X-API-Key": self.api_key, "User-Agent": "vectoramp-python/0.3.0"}
+        merged = {"X-API-Key": self.api_key, "User-Agent": "vectoramp-python/0.3.1"}
         if headers:
             merged.update(headers)
         return merged
