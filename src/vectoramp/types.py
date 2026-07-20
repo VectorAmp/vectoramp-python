@@ -18,6 +18,7 @@ class MetadataSchemaField(TypedDict):
 
 
 MetadataSchema = Sequence[MetadataSchemaField]
+MetadataSchemaInput = Union[MetadataSchema, Mapping[str, Mapping[str, Any]]]
 
 
 class EmbeddingConfig(TypedDict):

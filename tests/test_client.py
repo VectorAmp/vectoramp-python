@@ -92,6 +92,22 @@ def test_dataset_create_minimal_name_only_defaults() -> None:
     }
 
 
+def test_dataset_create_normalizes_legacy_metadata_schema_mapping() -> None:
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return json_response({"id": "ds_legacy"}, 201)
+
+    client = make_client(handler)
+    client.datasets.create(
+        name="legacy",
+        metadata_schema={"title": {"type": "string"}},
+    )
+
+    assert seen["body"]["schema"] == [{"name": "title", "type": "string"}]
+
+
 @pytest.mark.parametrize(
     ("method_name", "mode"),
     [("patch_metadata_schema", "merge"), ("replace_metadata_schema", "replace")],

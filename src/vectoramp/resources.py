@@ -6,7 +6,7 @@ import mimetypes
 import uuid
 from collections.abc import ItemsView, KeysView, ValuesView
 from pathlib import Path
-from typing import Any, Iterator, Mapping, Optional, Sequence, Union
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Union
 from urllib.parse import quote
 
 from .embeddings import (
@@ -34,6 +34,7 @@ from .types import (
     ConversationTurn,
     Filters,
     MetadataSchema,
+    MetadataSchemaInput,
     Metric,
     Vector,
     VectorId,
@@ -393,7 +394,7 @@ class DatasetsResource:
         embedding_model: str = VECTORAMP_EMBEDDING_4B,
         hybrid: bool = False,
         filters: Optional[Mapping[str, Any]] = None,
-        metadata_schema: Optional[MetadataSchema] = None,
+        metadata_schema: Optional[MetadataSchemaInput] = None,
         tuning: Optional[Mapping[str, Any]] = None,
         openai_api_key: Optional[str] = None,
         openai_secret_ref: str = "emb:openai:api_key",
@@ -468,7 +469,7 @@ class DatasetsResource:
         if filters is not None:
             body["filters"] = dict(filters)
         if metadata_schema is not None:
-            body["schema"] = [dict(field) for field in metadata_schema]
+            body["schema"] = self._normalize_metadata_schema(metadata_schema)
         if tuning is not None:
             body["tuning"] = dict(tuning)
         return self._to_dataset(self._transport.request("POST", "/datasets", json_body=body))
@@ -518,6 +519,16 @@ class DatasetsResource:
         return self._to_dataset(
             self._transport.request("PATCH", f"/datasets/{dataset_id}/schema", json_body=body)
         )
+
+    @staticmethod
+    def _normalize_metadata_schema(schema: MetadataSchemaInput) -> List[Dict[str, Any]]:
+        """Normalize the legacy field-name mapping and the canonical field array."""
+        if isinstance(schema, Mapping):
+            return [
+                {"name": name, **dict(config)}
+                for name, config in schema.items()
+            ]
+        return [dict(field) for field in schema]
 
     def delete(self, dataset_id: str) -> Any:
         """Delete a dataset and return the API response.
