@@ -9,6 +9,8 @@ import pytest
 from vectoramp import (
     ConfluenceSource,
     GCSSource,
+    GitHubSource,
+    GitLabSource,
     GoogleDriveSource,
     JiraSource,
     VectorAmp,
@@ -307,3 +309,217 @@ def test_connect_requires_id() -> None:
     client = make_client(handler)
     with pytest.raises(ValueError):
         client.connections.connect("google_drive", poll_interval=0, timeout=5)
+
+
+# --------------------------------------------------------------------------- #
+# Source-control source builders (GitHub / GitLab)
+# --------------------------------------------------------------------------- #
+
+
+def test_github_source_builds_minimal_config() -> None:
+    body = GitHubSource(installation_id=42, repositories=["octo/hello-world"]).to_create_request()
+
+    assert body == {
+        "name": "github-octo-hello-world",
+        "source_type": "github",
+        "config": {"installation_id": 42, "repositories": ["octo/hello-world"]},
+    }
+
+
+def test_github_source_serializes_all_options() -> None:
+    body = GitHubSource(
+        name="Platform repos",
+        installation_id=7,
+        repositories=["acme/api", "acme/web"],
+        ref_mode="explicit",
+        refs=["main", "release"],
+        excluded_refs=["wip"],
+        active_branch_days=30,
+        include_pull_requests=False,
+        include_review_threads=False,
+        include_direct_commits=False,
+        include_globs=["docs/**"],
+        exclude_globs=["**/*.lock"],
+        max_file_size_bytes=2_000_000,
+        sync_mode="full",
+        description="Platform code",
+        metadata={"team": "platform"},
+        config_extra={"experimental": True},
+    ).to_create_request()
+
+    assert body == {
+        "name": "Platform repos",
+        "source_type": "github",
+        "config": {
+            "installation_id": 7,
+            "repositories": ["acme/api", "acme/web"],
+            "ref_mode": "explicit",
+            "refs": ["main", "release"],
+            "excluded_refs": ["wip"],
+            "active_branch_days": 30,
+            "include_pull_requests": False,
+            "include_review_threads": False,
+            "include_direct_commits": False,
+            "include_globs": ["docs/**"],
+            "exclude_globs": ["**/*.lock"],
+            "max_file_size_bytes": 2_000_000,
+            "sync_mode": "full",
+            "experimental": True,
+        },
+        "description": "Platform code",
+        "metadata": {"team": "platform"},
+    }
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        GitHubSource(repositories=["octo/hello-world"]),
+        GitHubSource(installation_id=-1, repositories=["octo/hello-world"]),
+        GitHubSource(installation_id=42),
+    ],
+)
+def test_github_source_requires_installation_and_repositories(source: GitHubSource) -> None:
+    with pytest.raises(ValueError):
+        source.to_create_request()
+
+
+def test_gitlab_source_builds_minimal_config() -> None:
+    body = GitLabSource(projects=["mygroup/myproject"]).to_create_request()
+
+    assert body == {
+        "name": "gitlab-mygroup-myproject",
+        "source_type": "gitlab",
+        "config": {
+            "auth_mode": "oauth",
+            "gitlab_url": "https://gitlab.com",
+            "projects": ["mygroup/myproject"],
+        },
+    }
+
+
+def test_gitlab_source_names_from_group_when_no_project() -> None:
+    body = GitLabSource(groups=["mygroup"]).to_create_request()
+
+    assert body["name"] == "gitlab-mygroup"
+    assert body["config"]["groups"] == ["mygroup"]
+    assert "projects" not in body["config"]
+
+
+def test_gitlab_source_serializes_token_auth_and_options() -> None:
+    body = GitLabSource(
+        name="Self-managed",
+        groups=["platform"],
+        projects=["platform/api"],
+        auth_mode="token",
+        gitlab_url="https://gitlab.example.com",
+        access_token="glpat-secret",
+        ref_mode="active",
+        refs=["main"],
+        excluded_refs=["scratch"],
+        active_branch_days=14,
+        include_merge_requests=False,
+        include_review_threads=False,
+        include_direct_commits=False,
+        include_globs=["src/**"],
+        exclude_globs=["**/*.png"],
+        max_file_size_bytes=500_000,
+        sync_mode="full",
+    ).to_create_request()
+
+    assert body["config"] == {
+        "auth_mode": "token",
+        "gitlab_url": "https://gitlab.example.com",
+        "groups": ["platform"],
+        "projects": ["platform/api"],
+        "access_token": "glpat-secret",
+        "ref_mode": "active",
+        "refs": ["main"],
+        "excluded_refs": ["scratch"],
+        "active_branch_days": 14,
+        "include_merge_requests": False,
+        "include_review_threads": False,
+        "include_direct_commits": False,
+        "include_globs": ["src/**"],
+        "exclude_globs": ["**/*.png"],
+        "max_file_size_bytes": 500_000,
+        "sync_mode": "full",
+    }
+
+
+def test_gitlab_source_supports_connection_id() -> None:
+    config = GitLabSource(projects=["g/p"], connection_id="conn_gl").to_create_request()["config"]
+
+    assert config["connection_id"] == "conn_gl"
+    assert "access_token" not in config
+
+
+def test_gitlab_source_requires_group_or_project() -> None:
+    with pytest.raises(ValueError):
+        GitLabSource().to_create_request()
+
+
+def test_create_github_and_gitlab_post_to_sources() -> None:
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append((request.url.path, json.loads(request.content)))
+        return json_response({"id": "src_new"}, status_code=201)
+
+    client = make_client(handler)
+
+    assert client.sources.create_github(
+        installation_id=42, repositories=["octo/hello-world"]
+    ) == {"id": "src_new"}
+    assert client.sources.create_gitlab(
+        projects=["mygroup/myproject"], auth_mode="token", access_token="glpat-secret"
+    ) == {"id": "src_new"}
+
+    assert calls[0] == (
+        "/ingestion/sources",
+        {
+            "name": "github-octo-hello-world",
+            "source_type": "github",
+            "config": {"installation_id": 42, "repositories": ["octo/hello-world"]},
+        },
+    )
+    assert calls[1] == (
+        "/ingestion/sources",
+        {
+            "name": "gitlab-mygroup-myproject",
+            "source_type": "gitlab",
+            "config": {
+                "auth_mode": "token",
+                "gitlab_url": "https://gitlab.com",
+                "projects": ["mygroup/myproject"],
+                "access_token": "glpat-secret",
+            },
+        },
+    )
+
+
+def test_validate_source_accepts_source_control_builders() -> None:
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(json.loads(request.content))
+        return json_response({"valid": True})
+
+    client = make_client(handler)
+
+    client.sources.validate_source(GitHubSource(installation_id=1, repositories=["o/r"]))
+    client.sources.validate_source(GitLabSource(groups=["g"]))
+
+    # Validation bodies carry source_type + config only (no name).
+    assert calls[0] == {
+        "source_type": "github",
+        "config": {"installation_id": 1, "repositories": ["o/r"]},
+    }
+    assert calls[1] == {
+        "source_type": "gitlab",
+        "config": {
+            "auth_mode": "oauth",
+            "gitlab_url": "https://gitlab.com",
+            "groups": ["g"],
+        },
+    }

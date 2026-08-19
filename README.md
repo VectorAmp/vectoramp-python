@@ -302,8 +302,31 @@ gdrive = client.sources.create_google_drive(
     include_shared_drives=True,
 )
 
+github = client.sources.create_github(
+    installation_id=42,                 # from the VectorAmp GitHub App install
+    repositories=["acme/api", "acme/web"],
+    ref_mode="active",                  # server default: recently pushed branches
+    include_pull_requests=True,         # default
+)
+
+gitlab = client.sources.create_gitlab(
+    projects=["mygroup/myproject"],     # and/or groups=["mygroup"]
+    auth_mode="token",                  # defaults to "oauth"
+    access_token="…",
+    gitlab_url="https://gitlab.com",    # override for self-managed
+)
+
 upload_source = client.sources.create_file_upload()
 ```
+
+GitHub sources authenticate through the VectorAmp GitHub App, so the SDK never
+takes a GitHub token. Install the app from the Sources page in the VectorAmp
+app, then pass the `installation_id` it reports along with the `owner/repo`
+names you want ingested. Both connectors ingest repository files plus active
+branches, pull/merge requests, and review discussions; turn parts off with
+`include_pull_requests` / `include_merge_requests`, `include_review_threads`,
+and `include_direct_commits`, and narrow file selection with `include_globs`,
+`exclude_globs`, and `max_file_size_bytes`.
 
 `sync_mode` is omitted unless you set it, so the server applies its default of
 `"incremental"` for the connectors that support it. Pass `sync_mode="full"` to
@@ -311,7 +334,8 @@ force a full re-sync.
 
 The supported typed source classes are `WebSource`, `S3Source`, `GCSSource`,
 `GoogleDriveSource` (`source_type="gdrive"`), `JiraSource`, `ConfluenceSource`,
-and `FileUploadSource` (`source_type="file_upload"`). Use `GenericSource` as an
+`GitHubSource`, `GitLabSource`, and `FileUploadSource`
+(`source_type="file_upload"`). Use `GenericSource` as an
 escape hatch when the API supports a source type before the SDK has a dedicated
 class:
 

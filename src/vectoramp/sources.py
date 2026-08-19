@@ -8,7 +8,17 @@ from urllib.parse import urlparse
 
 from .types import JSON
 
-KnownSourceType = Literal["s3", "web", "gcs", "gdrive", "file_upload", "jira", "confluence"]
+KnownSourceType = Literal[
+    "s3",
+    "web",
+    "gcs",
+    "gdrive",
+    "file_upload",
+    "jira",
+    "confluence",
+    "github",
+    "gitlab",
+]
 
 
 @runtime_checkable
@@ -423,6 +433,188 @@ class ConfluenceSource:
         )
 
 
+@dataclass(frozen=True)
+class GitHubSource:
+    """GitHub ingestion source backed by the VectorAmp GitHub App.
+
+    Repositories, active branches, pull requests, and review discussions are
+    read through a GitHub App installation, so no token is passed to the SDK.
+    Install the VectorAmp GitHub App from the app's Sources page first; the
+    ``installation_id`` shown there is the value this builder needs.
+
+    Args:
+        name: Source name. Defaults to ``github-{first-repository}``.
+        installation_id: GitHub App installation id. Required, must be positive.
+        repositories: ``owner/repo`` full names to ingest. At least one required.
+        ref_mode: Branch selection strategy — ``"active"`` (default on the
+            server), ``"default"``, or ``"explicit"``.
+        refs: Explicit branch names, used with ``ref_mode="explicit"``.
+        excluded_refs: Branch names to skip.
+        active_branch_days: How recently a branch must have been pushed to count
+            as active (1–90). Server default is 7.
+        include_pull_requests: Ingest pull requests. Server default is true.
+        include_review_threads: Ingest review discussions. Server default is true.
+        include_direct_commits: Ingest commits pushed outside a pull request.
+            Server default is true.
+        include_globs: Path globs to include. Server default is ``["**/*"]``.
+        exclude_globs: Path globs to skip.
+        max_file_size_bytes: Per-file size ceiling (1–25_000_000). Server
+            default is 1_000_000.
+        sync_mode: Optional sync mode. Omitted from the request when ``None`` so
+            the server applies its default (``"incremental"``).
+        description: Optional source description.
+        metadata: Optional source metadata.
+        config_extra: Optional extra config fields merged into the request.
+    """
+
+    name: Optional[str] = None
+    installation_id: int = 0
+    repositories: Sequence[str] = ()
+    ref_mode: Optional[str] = None
+    refs: Optional[Sequence[str]] = None
+    excluded_refs: Optional[Sequence[str]] = None
+    active_branch_days: Optional[int] = None
+    include_pull_requests: Optional[bool] = None
+    include_review_threads: Optional[bool] = None
+    include_direct_commits: Optional[bool] = None
+    include_globs: Optional[Sequence[str]] = None
+    exclude_globs: Optional[Sequence[str]] = None
+    max_file_size_bytes: Optional[int] = None
+    sync_mode: Optional[str] = None
+    description: Optional[str] = None
+    metadata: Optional[Mapping[str, Any]] = None
+    config_extra: Optional[Mapping[str, Any]] = None
+
+    def to_create_request(self) -> JSON:
+        """Return source-create request fields for this GitHub source."""
+        if not self.installation_id or self.installation_id <= 0:
+            raise ValueError("GitHubSource requires a positive installation_id.")
+        repositories = list(self.repositories)
+        if not repositories:
+            raise ValueError("GitHubSource requires at least one repository.")
+        config: JSON = {
+            "installation_id": int(self.installation_id),
+            "repositories": repositories,
+        }
+        _set_optional(config, "ref_mode", self.ref_mode)
+        _set_optional_sequence(config, "refs", self.refs)
+        _set_optional_sequence(config, "excluded_refs", self.excluded_refs)
+        _set_optional(config, "active_branch_days", self.active_branch_days)
+        _set_optional(config, "include_pull_requests", self.include_pull_requests)
+        _set_optional(config, "include_review_threads", self.include_review_threads)
+        _set_optional(config, "include_direct_commits", self.include_direct_commits)
+        _set_optional_sequence(config, "include_globs", self.include_globs)
+        _set_optional_sequence(config, "exclude_globs", self.exclude_globs)
+        _set_optional(config, "max_file_size_bytes", self.max_file_size_bytes)
+        _set_optional(config, "sync_mode", self.sync_mode)
+        _merge_extra(config, self.config_extra)
+        return _source_body(
+            name=self.name or _default_source_name("github", repositories[0]),
+            source_type="github",
+            config=config,
+            description=self.description,
+            metadata=self.metadata,
+        )
+
+
+@dataclass(frozen=True)
+class GitLabSource:
+    """GitLab ingestion source for gitlab.com or a self-managed instance.
+
+    Projects, active branches, merge requests, and discussions are read with
+    either an access token (``auth_mode="token"`` plus ``access_token``) or a
+    stored OAuth connection (``connection_id``). At least one group or project
+    must be given.
+
+    Args:
+        name: Source name. Defaults to ``gitlab-{first-project-or-group}``.
+        groups: Group paths to ingest, e.g. ``["mygroup"]``. Required unless
+            ``projects`` is given.
+        projects: Project paths with namespace, e.g. ``["mygroup/myproject"]``.
+            Required unless ``groups`` is given.
+        auth_mode: ``"oauth"`` (default) or ``"token"``.
+        gitlab_url: Instance base URL. Defaults to ``"https://gitlab.com"``.
+        access_token: Personal or group access token for ``auth_mode="token"``.
+        connection_id: Id of a stored OAuth connection to authorize the source
+            with, used instead of an inline token.
+        ref_mode: Branch selection strategy — ``"active"`` (default on the
+            server), ``"default"``, or ``"explicit"``.
+        refs: Explicit branch names, used with ``ref_mode="explicit"``.
+        excluded_refs: Branch names to skip.
+        active_branch_days: How recently a branch must have been pushed to count
+            as active (1–90). Server default is 7.
+        include_merge_requests: Ingest merge requests. Server default is true.
+        include_review_threads: Ingest review discussions. Server default is true.
+        include_direct_commits: Ingest commits pushed outside a merge request.
+            Server default is true.
+        include_globs: Path globs to include. Server default is ``["**/*"]``.
+        exclude_globs: Path globs to skip.
+        max_file_size_bytes: Per-file size ceiling (1–25_000_000). Server
+            default is 1_000_000.
+        sync_mode: Optional sync mode. Omitted from the request when ``None`` so
+            the server applies its default (``"incremental"``).
+        description: Optional source description.
+        metadata: Optional source metadata.
+        config_extra: Optional extra config fields merged into the request.
+    """
+
+    name: Optional[str] = None
+    groups: Optional[Sequence[str]] = None
+    projects: Optional[Sequence[str]] = None
+    auth_mode: str = "oauth"
+    gitlab_url: str = "https://gitlab.com"
+    access_token: Optional[str] = None
+    connection_id: Optional[str] = None
+    ref_mode: Optional[str] = None
+    refs: Optional[Sequence[str]] = None
+    excluded_refs: Optional[Sequence[str]] = None
+    active_branch_days: Optional[int] = None
+    include_merge_requests: Optional[bool] = None
+    include_review_threads: Optional[bool] = None
+    include_direct_commits: Optional[bool] = None
+    include_globs: Optional[Sequence[str]] = None
+    exclude_globs: Optional[Sequence[str]] = None
+    max_file_size_bytes: Optional[int] = None
+    sync_mode: Optional[str] = None
+    description: Optional[str] = None
+    metadata: Optional[Mapping[str, Any]] = None
+    config_extra: Optional[Mapping[str, Any]] = None
+
+    def to_create_request(self) -> JSON:
+        """Return source-create request fields for this GitLab source."""
+        groups = list(self.groups or ())
+        projects = list(self.projects or ())
+        if not groups and not projects:
+            raise ValueError("GitLabSource requires at least one group or project.")
+        config: JSON = {"auth_mode": self.auth_mode, "gitlab_url": self.gitlab_url}
+        if groups:
+            config["groups"] = groups
+        if projects:
+            config["projects"] = projects
+        _set_optional(config, "access_token", self.access_token)
+        _set_optional(config, "connection_id", self.connection_id)
+        _set_optional(config, "ref_mode", self.ref_mode)
+        _set_optional_sequence(config, "refs", self.refs)
+        _set_optional_sequence(config, "excluded_refs", self.excluded_refs)
+        _set_optional(config, "active_branch_days", self.active_branch_days)
+        _set_optional(config, "include_merge_requests", self.include_merge_requests)
+        _set_optional(config, "include_review_threads", self.include_review_threads)
+        _set_optional(config, "include_direct_commits", self.include_direct_commits)
+        _set_optional_sequence(config, "include_globs", self.include_globs)
+        _set_optional_sequence(config, "exclude_globs", self.exclude_globs)
+        _set_optional(config, "max_file_size_bytes", self.max_file_size_bytes)
+        _set_optional(config, "sync_mode", self.sync_mode)
+        _merge_extra(config, self.config_extra)
+        hint = projects[0] if projects else groups[0]
+        return _source_body(
+            name=self.name or _default_source_name("gitlab", hint),
+            source_type="gitlab",
+            config=config,
+            description=self.description,
+            metadata=self.metadata,
+        )
+
+
 TypedSource = Union[
     GenericSource,
     WebSource,
@@ -432,6 +624,8 @@ TypedSource = Union[
     FileUploadSource,
     JiraSource,
     ConfluenceSource,
+    GitHubSource,
+    GitLabSource,
 ]
 SourceInput = Union[str, TypedSource]
 
