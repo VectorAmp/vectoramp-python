@@ -20,6 +20,8 @@ from .sources import (
     ConfluenceSource,
     FileUploadSource,
     GCSSource,
+    GitHubSource,
+    GitLabSource,
     GoogleDriveSource,
     JiraSource,
     S3Source,
@@ -1237,6 +1239,123 @@ class IngestionResource:
                 sync_mode=sync_mode,
                 service_account_json=service_account_json,
                 credentials_json=credentials_json,
+                description=description,
+                metadata=metadata,
+                config_extra=config_extra,
+            )
+        )
+
+    def create_github(
+        self,
+        *,
+        installation_id: int,
+        repositories: Sequence[str],
+        name: Optional[str] = None,
+        ref_mode: Optional[str] = None,
+        refs: Optional[Sequence[str]] = None,
+        excluded_refs: Optional[Sequence[str]] = None,
+        active_branch_days: Optional[int] = None,
+        include_pull_requests: Optional[bool] = None,
+        include_review_threads: Optional[bool] = None,
+        include_direct_commits: Optional[bool] = None,
+        include_globs: Optional[Sequence[str]] = None,
+        exclude_globs: Optional[Sequence[str]] = None,
+        max_file_size_bytes: Optional[int] = None,
+        sync_mode: Optional[str] = None,
+        description: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+        config_extra: Optional[Mapping[str, Any]] = None,
+    ) -> JSON:
+        """Create a GitHub source backed by the VectorAmp GitHub App.
+
+        Install the VectorAmp GitHub App from the app's Sources page first and
+        pass the resulting ``installation_id`` here; the SDK never handles a
+        GitHub token. ``name`` defaults to ``github-{first-repository}``.
+        Optional settings are omitted when ``None`` so the server applies its
+        defaults (``ref_mode="active"``, pull requests, review threads, and
+        direct commits included, ``sync_mode="incremental"``).
+
+        Returns:
+            Created source JSON.
+        """
+        return self.create_source(
+            GitHubSource(
+                name=name,
+                installation_id=installation_id,
+                repositories=repositories,
+                ref_mode=ref_mode,
+                refs=refs,
+                excluded_refs=excluded_refs,
+                active_branch_days=active_branch_days,
+                include_pull_requests=include_pull_requests,
+                include_review_threads=include_review_threads,
+                include_direct_commits=include_direct_commits,
+                include_globs=include_globs,
+                exclude_globs=exclude_globs,
+                max_file_size_bytes=max_file_size_bytes,
+                sync_mode=sync_mode,
+                description=description,
+                metadata=metadata,
+                config_extra=config_extra,
+            )
+        )
+
+    def create_gitlab(
+        self,
+        *,
+        groups: Optional[Sequence[str]] = None,
+        projects: Optional[Sequence[str]] = None,
+        name: Optional[str] = None,
+        auth_mode: str = "oauth",
+        gitlab_url: str = "https://gitlab.com",
+        access_token: Optional[str] = None,
+        connection_id: Optional[str] = None,
+        ref_mode: Optional[str] = None,
+        refs: Optional[Sequence[str]] = None,
+        excluded_refs: Optional[Sequence[str]] = None,
+        active_branch_days: Optional[int] = None,
+        include_merge_requests: Optional[bool] = None,
+        include_review_threads: Optional[bool] = None,
+        include_direct_commits: Optional[bool] = None,
+        include_globs: Optional[Sequence[str]] = None,
+        exclude_globs: Optional[Sequence[str]] = None,
+        max_file_size_bytes: Optional[int] = None,
+        sync_mode: Optional[str] = None,
+        description: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+        config_extra: Optional[Mapping[str, Any]] = None,
+    ) -> JSON:
+        """Create a GitLab source for gitlab.com or a self-managed instance.
+
+        Pass at least one group or project. Authenticate with
+        ``auth_mode="token"`` plus ``access_token``, or with a stored OAuth
+        ``connection_id``. ``name`` defaults to
+        ``gitlab-{first-project-or-group}``. Optional settings are omitted when
+        ``None`` so the server applies its defaults.
+
+        Returns:
+            Created source JSON.
+        """
+        return self.create_source(
+            GitLabSource(
+                name=name,
+                groups=groups,
+                projects=projects,
+                auth_mode=auth_mode,
+                gitlab_url=gitlab_url,
+                access_token=access_token,
+                connection_id=connection_id,
+                ref_mode=ref_mode,
+                refs=refs,
+                excluded_refs=excluded_refs,
+                active_branch_days=active_branch_days,
+                include_merge_requests=include_merge_requests,
+                include_review_threads=include_review_threads,
+                include_direct_commits=include_direct_commits,
+                include_globs=include_globs,
+                exclude_globs=exclude_globs,
+                max_file_size_bytes=max_file_size_bytes,
+                sync_mode=sync_mode,
                 description=description,
                 metadata=metadata,
                 config_extra=config_extra,
