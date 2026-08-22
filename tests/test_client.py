@@ -552,7 +552,7 @@ def test_intelligence_scope_omits_dataset_ids_when_unscoped() -> None:
         seen["body"] = json.loads(request.content)
         return json_response({"answer": "42"})
 
-    for scope in (None, [], ["all"]):
+    for scope in (None, [], ["all"], ["", "  "]):
         client = make_client(handler)
         client.ask("why?", dataset_ids=scope)
         assert "dataset_ids" not in seen["body"], scope

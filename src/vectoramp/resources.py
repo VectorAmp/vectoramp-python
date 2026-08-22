@@ -57,7 +57,8 @@ def normalize_dataset_ids(dataset_ids: Optional[Sequence[str]]) -> List[str]:
         return []
     if isinstance(dataset_ids, str):
         raise TypeError("dataset_ids must be a sequence of dataset ids, not a single string.")
-    return [str(d) for d in dataset_ids if d and str(d) != "all"]
+    scope = [str(d).strip() for d in dataset_ids if d]
+    return [d for d in scope if d and d != "all"]
 
 
 class Dataset:
