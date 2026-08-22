@@ -45,6 +45,21 @@ from .types import (
 PathLike = Union[str, Path]
 
 
+def normalize_dataset_ids(dataset_ids: Optional[Sequence[str]]) -> List[str]:
+    """Normalize an Intelligence dataset scope for the wire.
+
+    ``/intelligence/query`` takes ``dataset_ids`` (a list) and expresses "every
+    dataset the caller can see" by the field being absent. The old ``"all"``
+    sentinel is retired, so it is dropped here rather than sent: the API drops it
+    too, and leaving it in would only make the request look narrower than it is.
+    """
+    if not dataset_ids:
+        return []
+    if isinstance(dataset_ids, str):
+        raise TypeError("dataset_ids must be a sequence of dataset ids, not a single string.")
+    return [str(d) for d in dataset_ids if d and str(d) != "all"]
+
+
 class Dataset:
     """Dataset resource object returned by create/get/list calls.
 
@@ -242,7 +257,7 @@ class Dataset:
             raise TypeError("Dataset.ask requires a Dataset created by a VectorAmp client.")
         return self.client.intelligence.query(
             query,
-            dataset_id=self.id,
+            dataset_ids=[self.id],
             top_k=top_k,
             conversation_history=conversation_history,
             include_sources=include_sources,
@@ -1699,7 +1714,7 @@ class IntelligenceResource:
         self,
         query: str,
         *,
-        dataset_id: Optional[str] = None,
+        dataset_ids: Optional[Sequence[str]] = None,
         top_k: int = 5,
         conversation_history: Optional[Sequence[ConversationTurn]] = None,
         include_sources: bool = True,
@@ -1708,8 +1723,8 @@ class IntelligenceResource:
 
         Args:
             query: Natural-language question.
-            dataset_id: Optional dataset to ground the answer in. When omitted,
-                the API chooses its configured/default scope.
+            dataset_ids: Datasets to scope the answer to. Omit (or pass an empty
+                sequence) to search every dataset the caller can see.
             top_k: Number of retrieved chunks to consider. Defaults to ``5``.
             conversation_history: Optional prior chat turns.
             include_sources: Whether to include source chunks. Defaults to ``True``.
@@ -1719,7 +1734,7 @@ class IntelligenceResource:
         """
         body = self._body(
             query,
-            dataset_id=dataset_id,
+            dataset_ids=dataset_ids,
             top_k=top_k,
             conversation_history=conversation_history,
             include_sources=include_sources,
@@ -1731,7 +1746,7 @@ class IntelligenceResource:
         self,
         query: str,
         *,
-        dataset_id: Optional[str] = None,
+        dataset_ids: Optional[Sequence[str]] = None,
         top_k: int = 5,
         conversation_history: Optional[Sequence[ConversationTurn]] = None,
         include_sources: bool = True,
@@ -1740,8 +1755,8 @@ class IntelligenceResource:
 
         Args:
             query: Natural-language question.
-            dataset_id: Optional dataset to ground the answer in. When omitted,
-                the API chooses its configured/default scope.
+            dataset_ids: Datasets to scope the answer to. Omit (or pass an empty
+                sequence) to search every dataset the caller can see.
             top_k: Number of retrieved chunks to consider. Defaults to ``5``.
             conversation_history: Optional prior chat turns.
             include_sources: Whether to include source chunks. Defaults to ``True``.
@@ -1751,7 +1766,7 @@ class IntelligenceResource:
         """
         body = self._body(
             query,
-            dataset_id=dataset_id,
+            dataset_ids=dataset_ids,
             top_k=top_k,
             conversation_history=conversation_history,
             include_sources=include_sources,
@@ -1818,7 +1833,7 @@ class IntelligenceResource:
     def _body(
         query: str,
         *,
-        dataset_id: Optional[str],
+        dataset_ids: Optional[Sequence[str]],
         top_k: int,
         conversation_history: Optional[Sequence[ConversationTurn]],
         include_sources: bool,
@@ -1830,8 +1845,11 @@ class IntelligenceResource:
             "stream": stream,
             "include_sources": include_sources,
         }
-        if dataset_id is not None:
-            body["dataset_id"] = dataset_id
+        scope = normalize_dataset_ids(dataset_ids)
+        # An omitted field is how the API says "every dataset I can see"; sending
+        # an empty list would be a narrower, different request.
+        if scope:
+            body["dataset_ids"] = scope
         if conversation_history is not None:
             body["conversation_history"] = list(conversation_history)
         return body

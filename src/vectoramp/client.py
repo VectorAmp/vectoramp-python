@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from types import TracebackType
-from typing import Iterator, Optional, Type
+from typing import Iterator, Optional, Sequence, Type
 
 import httpx
 
@@ -69,7 +69,7 @@ class VectorAmp:
         self,
         query: str,
         *,
-        dataset_id: Optional[str] = None,
+        dataset_ids: Optional[Sequence[str]] = None,
         top_k: int = 5,
         conversation_history: Optional[list[ConversationTurn]] = None,
         include_sources: bool = True,
@@ -78,8 +78,8 @@ class VectorAmp:
 
         Args:
             query: Natural-language question.
-            dataset_id: Optional dataset to ground the answer in. When omitted,
-                the API chooses its configured/default scope.
+            dataset_ids: Datasets to scope the answer to. Omit (or pass an empty
+                sequence) to search every dataset the caller can see.
             top_k: Number of retrieved chunks to consider. Defaults to ``5``.
             conversation_history: Optional prior chat turns.
             include_sources: Whether to include source chunks. Defaults to ``True``.
@@ -89,7 +89,7 @@ class VectorAmp:
         """
         return self.intelligence.query(
             query,
-            dataset_id=dataset_id,
+            dataset_ids=dataset_ids,
             top_k=top_k,
             conversation_history=conversation_history,
             include_sources=include_sources,
@@ -99,7 +99,7 @@ class VectorAmp:
         self,
         query: str,
         *,
-        dataset_id: Optional[str] = None,
+        dataset_ids: Optional[Sequence[str]] = None,
         top_k: int = 5,
         conversation_history: Optional[list[ConversationTurn]] = None,
         include_sources: bool = True,
@@ -108,8 +108,8 @@ class VectorAmp:
 
         Args:
             query: Natural-language question.
-            dataset_id: Optional dataset to ground the answer in. When omitted,
-                the API chooses its configured/default scope.
+            dataset_ids: Datasets to scope the answer to. Omit (or pass an empty
+                sequence) to search every dataset the caller can see.
             top_k: Number of retrieved chunks to consider. Defaults to ``5``.
             conversation_history: Optional prior chat turns.
             include_sources: Whether to include source chunks. Defaults to ``True``.
@@ -119,7 +119,7 @@ class VectorAmp:
         """
         yield from self.intelligence.stream(
             query,
-            dataset_id=dataset_id,
+            dataset_ids=dataset_ids,
             top_k=top_k,
             conversation_history=conversation_history,
             include_sources=include_sources,

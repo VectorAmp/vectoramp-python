@@ -448,7 +448,7 @@ def test_dataset_resource_instance_methods_delegate_to_services(tmp_path: Path) 
             "top_k": 5,
             "stream": False,
             "include_sources": True,
-            "dataset_id": "ds_1",
+            "dataset_ids": ["ds_1"],
         },
     ) in calls
 
@@ -533,15 +533,64 @@ def test_intelligence_query_and_top_level_ask() -> None:
         return json_response({"answer": "42"})
 
     client = make_client(handler)
-    assert client.ask("why?", dataset_id="all", top_k=2)["answer"] == "42"
+    assert client.ask("why?", dataset_ids=["ds_1", "ds_2"], top_k=2)["answer"] == "42"
     assert seen["path"] == "/intelligence/query"
     assert seen["body"] == {
         "query": "why?",
         "top_k": 2,
         "stream": False,
         "include_sources": True,
-        "dataset_id": "all",
+        "dataset_ids": ["ds_1", "ds_2"],
     }
+
+
+def test_intelligence_scope_omits_dataset_ids_when_unscoped() -> None:
+    """No scope means "every dataset I can see", which the API spells as an absent field."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return json_response({"answer": "42"})
+
+    for scope in (None, [], ["all"]):
+        client = make_client(handler)
+        client.ask("why?", dataset_ids=scope)
+        assert "dataset_ids" not in seen["body"], scope
+        assert "dataset_id" not in seen["body"], scope
+
+
+def test_intelligence_never_sends_retired_dataset_id() -> None:
+    """`dataset_id` was retired; the API answers any request carrying it with a 400."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return json_response({"answer": "42"})
+
+    client = make_client(handler)
+    client.intelligence.query("why?", dataset_ids=["ds_1"])
+    assert "dataset_id" not in seen["body"]
+
+    with pytest.raises(TypeError):
+        client.ask("why?", dataset_id="ds_1")  # type: ignore[call-arg]
+
+    # A bare string is a common slip that would otherwise be split per character.
+    with pytest.raises(TypeError):
+        client.ask("why?", dataset_ids="ds_1")  # type: ignore[arg-type]
+
+
+def test_intelligence_stream_scopes_to_every_requested_dataset() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        body = 'data: {"chunk_type":"done","content":"","metadata":{}}\n\n'
+        return httpx.Response(200, text=body, headers={"content-type": "text/event-stream"})
+
+    client = make_client(handler)
+    list(client.ask_stream("why?", dataset_ids=["ds_1", "ds_2", "ds_3"]))
+    assert seen["body"]["dataset_ids"] == ["ds_1", "ds_2", "ds_3"]
+    assert seen["body"]["stream"] is True
 
 
 def test_intelligence_stream() -> None:
