@@ -378,10 +378,18 @@ answer = dataset.ask("What are the key product features?", top_k=5)
 print(answer["answer"])
 ```
 
+Scope a question to one or more datasets with `dataset_ids`. Omit it to search every dataset the
+API key can see:
+
+```python
+answer = client.ask("Which contracts renew in Q4?", dataset_ids=[contracts.id, invoices.id])
+everything = client.ask("What changed this week?")   # no dataset_ids -> all visible datasets
+```
+
 Streaming SSE query:
 
 ```python
-for event in client.ask_stream("Summarize the docs", dataset_id=dataset_id):
+for event in client.ask_stream("Summarize the docs", dataset_ids=[dataset_id]):
     if event["chunk_type"] == "text":
         print(event["content"], end="")
 ```
@@ -438,8 +446,8 @@ listed first; optional arguments show their default.
 ### Client (`VectorAmp`)
 
 - `VectorAmp(api_key=None, *, base_url="https://api.vectoramp.com", timeout=30.0)` — `api_key` falls back to `VECTORAMP_API_KEY`.
-- `client.ask(query, *, dataset_id=None, top_k=5, conversation_history=None, include_sources=True)`
-- `client.ask_stream(query, *, dataset_id=None, top_k=5, conversation_history=None, include_sources=True)` — iterator of SSE chunks.
+- `client.ask(query, *, dataset_ids=None, top_k=5, conversation_history=None, include_sources=True)` — `dataset_ids` is a list; omit it to search every visible dataset.
+- `client.ask_stream(query, *, dataset_ids=None, top_k=5, conversation_history=None, include_sources=True)` — iterator of SSE chunks.
 - `client.close()` (also a context manager).
 
 ### Datasets (`client.datasets` / `Dataset`)

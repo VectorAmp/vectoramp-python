@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning.
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking:** Intelligence queries now scope with `dataset_ids` (a list) instead of the retired
+  `dataset_id`. `client.ask(...)`, `client.ask_stream(...)`, `client.intelligence.query(...)` and
+  `client.intelligence.stream(...)` take `dataset_ids=[...]`; `dataset.ask(...)` scopes itself to
+  its own dataset. `POST /intelligence/query` answers any request still carrying `dataset_id` with
+  a 400, so the field is never sent.
+- The `dataset_id="all"` sentinel is retired. Omit `dataset_ids` (or pass an empty list) to search
+  every dataset the API key can see.
+
 ## [0.4.0] - 2026-08-20
 
 ### Added
