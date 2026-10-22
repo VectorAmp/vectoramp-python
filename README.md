@@ -20,7 +20,26 @@ Licensed under the [Apache License 2.0](LICENSE).
 pip install vectoramp
 ```
 
-For local development:
+For local development, CI, and tests with the embedded SABLE runtime:
+
+```bash
+pip install "vectoramp[embedded]"
+```
+
+```python
+from vectoramp import VectorAmp
+
+client = VectorAmp.embedded("./.vectoramp-test")
+dataset = client.datasets.create(name="test-data", dim=4, metric="cosine")
+```
+
+The optional native runtime is governed by the separate proprietary VectorAmp
+Embedded SABLE Development License and is limited to non-production use.
+Production applications must use hosted or customer-operated VectorAmp SABLE.
+See the [embedded SABLE guide](https://docs.vectoramp.com/guides/embedded-sable-local-vector-database)
+for supported platforms, limits, filters, persistence, and license terms.
+
+To develop the SDK itself:
 
 ```bash
 git clone https://github.com/VectorAmp/vectoramp-python.git

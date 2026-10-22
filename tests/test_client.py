@@ -108,6 +108,19 @@ def test_dataset_create_normalizes_legacy_metadata_schema_mapping() -> None:
     assert seen["body"]["schema"] == [{"name": "title", "type": "string"}]
 
 
+def test_dataset_create_accepts_simple_metadata_type_mapping() -> None:
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return json_response({"id": "ds_1", "name": "docs"})
+
+    client = make_client(handler)
+    client.datasets.create(name="docs", metadata_schema={"title": "string"})
+
+    assert seen["body"]["schema"] == [{"name": "title", "type": "string"}]
+
+
 @pytest.mark.parametrize(
     ("method_name", "mode"),
     [("patch_metadata_schema", "merge"), ("replace_metadata_schema", "replace")],
@@ -241,9 +254,7 @@ def test_delete_vectors_payload_and_dataset_helper() -> None:
         return json_response({"deleted": 2, "ids": body.get("ids", [])})
 
     client = make_client(handler)
-    result = client.datasets.delete_vectors(
-        "ds_1", ["vec-a", 42], write_concern={"wait": True}
-    )
+    result = client.datasets.delete_vectors("ds_1", ["vec-a", 42], write_concern={"wait": True})
     dataset = Dataset(client.datasets, {"id": "ds_1"})
     dataset.delete_vectors(["vec-c"])
 
@@ -663,9 +674,12 @@ def test_typed_source_builders_use_ingestion_field_names() -> None:
         "config": {"bucket": "docs-bucket", "region": "us-east-1"},
     }
     # sync_mode is sent only when set; otherwise the server default applies.
-    assert S3Source(bucket="docs-bucket", sync_mode="incremental").to_create_request()["config"][
-        "sync_mode"
-    ] == "incremental"
+    assert (
+        S3Source(bucket="docs-bucket", sync_mode="incremental").to_create_request()["config"][
+            "sync_mode"
+        ]
+        == "incremental"
+    )
     assert GCSSource(bucket="docs-bucket", prefix="docs/").to_create_request() == {
         "name": "gcs-docs-bucket",
         "source_type": "gcs",
@@ -1048,27 +1062,30 @@ def test_intelligence_sessions_and_messages() -> None:
             and request.url.path == "/intelligence/sessions/sess_1/messages"
         ):
             return json_response({"id": "msg_1", "role": "user", "content": "hello"}, 201)
-        if (
-            request.method == "GET"
-            and request.url.path == "/intelligence/sessions/sess_1/messages"
-        ):
-            return json_response({
-                "messages": [{"id": "msg_1", "role": "user", "content": "hello"}]
-            })
+        if request.method == "GET" and request.url.path == "/intelligence/sessions/sess_1/messages":
+            return json_response(
+                {"messages": [{"id": "msg_1", "role": "user", "content": "hello"}]}
+            )
         if request.method == "DELETE" and request.url.path == "/intelligence/sessions/sess_1":
             return json_response({"deleted": True})
         raise AssertionError(f"unexpected request {request.method} {request.url}")
 
     client = make_client(handler)
 
-    assert client.intelligence.create_session(
-        title="Planning", workspace_id="ws_1", dataset_id="ds_1", metadata={"team": "eng"}
-    )["id"] == "sess_1"
+    assert (
+        client.intelligence.create_session(
+            title="Planning", workspace_id="ws_1", dataset_id="ds_1", metadata={"team": "eng"}
+        )["id"]
+        == "sess_1"
+    )
     assert client.intelligence.list_sessions(limit=25)["sessions"][0]["id"] == "sess_1"
     assert client.intelligence.get_session("sess_1")["id"] == "sess_1"
-    assert client.intelligence.append_message(
-        "sess_1", role="user", content="hello", metadata={"turn": 1}
-    )["id"] == "msg_1"
+    assert (
+        client.intelligence.append_message(
+            "sess_1", role="user", content="hello", metadata={"turn": 1}
+        )["id"]
+        == "msg_1"
+    )
     assert client.intelligence.list_messages("sess_1", limit=50)["messages"][0]["id"] == "msg_1"
     assert client.intelligence.delete_session("sess_1")["deleted"] is True
 
