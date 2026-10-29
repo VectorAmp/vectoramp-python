@@ -28,7 +28,7 @@ classifiers = [
 dependencies = ["httpx>=0.25,<1"]
 
 [project.optional-dependencies]
-embedded = ["vectoramp-sable-embedded-runtime==0.1.4"]
+embedded = ["vectoramp-sable-embedded-runtime==0.1.5"]
 dev = [
   "pytest>=7.4",
   "pytest-cov>=4.1",
