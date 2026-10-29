@@ -27,7 +27,7 @@ class FakeFilter:
         self.predicates.append((key, op, value))
 
 
-class FakeCollection:
+class FakeDataset:
     saved = {}
 
     def __init__(self, path: str, dimension: int) -> None:
@@ -37,13 +37,13 @@ class FakeCollection:
         self.indexed = False
 
     @classmethod
-    def create(cls, path: str, dimension: int, **_: object) -> "FakeCollection":
+    def create(cls, path: str, dimension: int, **_: object) -> "FakeDataset":
         value = cls(path, dimension)
         cls.saved[path] = value
         return value
 
     @classmethod
-    def open(cls, path: str) -> "FakeCollection":
+    def open(cls, path: str) -> "FakeDataset":
         return cls.saved[path]
 
     def insert(self, ids, vectors, metadata) -> None:
@@ -91,11 +91,11 @@ class FakeCollection:
 
 
 def test_embedded_client_uses_the_normal_dataset_api(tmp_path, monkeypatch) -> None:
-    FakeCollection.saved.clear()
+    FakeDataset.saved.clear()
     monkeypatch.setitem(
         sys.modules,
         "vectoramp_sable",
-        SimpleNamespace(SableCollection=FakeCollection, SableFilter=FakeFilter),
+        SimpleNamespace(SableDataset=FakeDataset, SableFilter=FakeFilter),
     )
     client = VectorAmp.embedded(tmp_path)
     dataset = client.datasets.create(
@@ -129,11 +129,11 @@ def test_embedded_client_uses_the_normal_dataset_api(tmp_path, monkeypatch) -> N
 
 
 def test_embedded_transport_catalog_filters_and_failures(tmp_path, monkeypatch) -> None:
-    FakeCollection.saved.clear()
+    FakeDataset.saved.clear()
     monkeypatch.setitem(
         sys.modules,
         "vectoramp_sable",
-        SimpleNamespace(SableCollection=FakeCollection, SableFilter=FakeFilter),
+        SimpleNamespace(SableDataset=FakeDataset, SableFilter=FakeFilter),
     )
     transport = EmbeddedTransport(tmp_path)
 
@@ -238,11 +238,11 @@ def test_embedded_transport_catalog_filters_and_failures(tmp_path, monkeypatch) 
 
 
 def test_embedded_delete_retains_catalog_when_storage_removal_fails(tmp_path, monkeypatch) -> None:
-    FakeCollection.saved.clear()
+    FakeDataset.saved.clear()
     monkeypatch.setitem(
         sys.modules,
         "vectoramp_sable",
-        SimpleNamespace(SableCollection=FakeCollection, SableFilter=FakeFilter),
+        SimpleNamespace(SableDataset=FakeDataset, SableFilter=FakeFilter),
     )
     transport = EmbeddedTransport(tmp_path)
     dataset = transport.request(

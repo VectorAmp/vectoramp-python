@@ -25,14 +25,14 @@ _DATASET_PATH = re.compile(r"^/datasets/([^/]+)(?:/(search|insert|stats|optimize
 
 
 class EmbeddedTransport(BaseTransport):
-    """Route the SDK dataset API to local, in-process SABLE collections."""
+    """Route the SDK dataset API to local, in-process SABLE datasets."""
 
     def __init__(self, root: Union[str, os.PathLike[str]]) -> None:
         self.root = Path(root).expanduser().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self._catalog_path = self.root / "catalog.json"
         self._lock = threading.RLock()
-        self._collections: Dict[str, Any] = {}
+        self._datasets: Dict[str, Any] = {}
         self._catalog = self._load_catalog()
 
     def request(
@@ -70,10 +70,10 @@ class EmbeddedTransport(BaseTransport):
         if operation is None and method == "DELETE":
             return self._delete(dataset_id)
         if operation == "stats" and method == "GET":
-            status = self._collection(dataset_id).status()
+            status = self._runtime_dataset(dataset_id).status()
             return {"vector_count": status.vector_count, "index_state": status.state}
         if operation == "index-status" and method == "GET":
-            status = self._collection(dataset_id).status()
+            status = self._runtime_dataset(dataset_id).status()
             return {
                 "state": status.state,
                 "vector_count": status.vector_count,
@@ -81,7 +81,7 @@ class EmbeddedTransport(BaseTransport):
                 "training_error": status.training_error,
             }
         if operation == "optimize" and method == "POST":
-            self._collection(dataset_id).optimize()
+            self._runtime_dataset(dataset_id).optimize()
             return self.request("GET", f"/datasets/{dataset_id}/index-status")
         if operation == "insert" and method == "POST":
             return self._insert(dataset_id, dict(json_body or {}))
@@ -102,11 +102,11 @@ class EmbeddedTransport(BaseTransport):
 
     def close(self) -> None:
         with self._lock:
-            self._collections.clear()
+            self._datasets.clear()
 
     def _create(self, body: Dict[str, Any]) -> Dict[str, Any]:
         try:
-            from vectoramp_sable import SableCollection
+            from vectoramp_sable import SableDataset
         except ImportError as error:  # pragma: no cover - platform packaging gate
             raise RuntimeError("embedded mode requires vectoramp-sable-embedded-runtime") from error
         dimension = int(body.get("dim") or body.get("dimension") or 0)
@@ -125,7 +125,7 @@ class EmbeddedTransport(BaseTransport):
             "index_type": "sable",
             "mode": "embedded",
         }
-        collection = SableCollection.create(
+        runtime_dataset = SableDataset.create(
             str(self.root / "datasets" / dataset_id),
             dimension,
             metric=dataset["metric"],
@@ -135,7 +135,7 @@ class EmbeddedTransport(BaseTransport):
         )
         with self._lock:
             self._catalog["datasets"][dataset_id] = dataset
-            self._collections[dataset_id] = collection
+            self._datasets[dataset_id] = runtime_dataset
             self._save_catalog()
         return dict(dataset)
 
@@ -168,7 +168,7 @@ class EmbeddedTransport(BaseTransport):
             metadata.append(
                 {key: str(value) for key, value in (record.get("metadata") or {}).items()}
             )
-        self._collection(dataset_id).insert(ids, values, metadata)
+        self._runtime_dataset(dataset_id).insert(ids, values, metadata)
         return {"inserted": len(vectors)}
 
     def _search(self, dataset_id: str, body: Dict[str, Any]) -> Dict[str, Any]:
@@ -189,7 +189,7 @@ class EmbeddedTransport(BaseTransport):
                     item,
                     self._dataset(dataset_id).get("metadata_schema") or {},
                 )
-        hits = self._collection(dataset_id).search(
+        hits = self._runtime_dataset(dataset_id).search(
             list(body["query"]), int(body.get("top_k") or 10), filter_value
         )
         include_metadata = body.get("include_metadata") is not False
@@ -250,21 +250,21 @@ class EmbeddedTransport(BaseTransport):
         except KeyError as error:
             raise APIError(404, f"dataset {dataset_id} was not found") from error
 
-    def _collection(self, dataset_id: str) -> Any:
+    def _runtime_dataset(self, dataset_id: str) -> Any:
         self._dataset(dataset_id)
         with self._lock:
-            collection = self._collections.get(dataset_id)
-            if collection is None:
-                from vectoramp_sable import SableCollection
+            runtime_dataset = self._datasets.get(dataset_id)
+            if runtime_dataset is None:
+                from vectoramp_sable import SableDataset
 
-                collection = SableCollection.open(str(self.root / "datasets" / dataset_id))
-                self._collections[dataset_id] = collection
-            return collection
+                runtime_dataset = SableDataset.open(str(self.root / "datasets" / dataset_id))
+                self._datasets[dataset_id] = runtime_dataset
+            return runtime_dataset
 
     def _delete(self, dataset_id: str) -> None:
         self._dataset(dataset_id)
         with self._lock:
-            self._collections.pop(dataset_id, None)
+            self._datasets.pop(dataset_id, None)
             # Catalog removal is still required when storage was already
             # removed by an interrupted or externally completed delete.
             with suppress(FileNotFoundError):
