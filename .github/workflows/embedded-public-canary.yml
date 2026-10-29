@@ -1,0 +1,31 @@
+name: Embedded public canary
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Public vectoramp SDK version to qualify
+        required: true
+        type: string
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the public SDK and embedded runtime
+        env:
+          SDK_VERSION: ${{ inputs.version }}
+        run: |
+          for attempt in $(seq 1 60); do
+            if python -m pip install --no-cache-dir --index-url https://pypi.org/simple "vectoramp[embedded]==${SDK_VERSION}"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+      - name: Run embedded public-registry canary
+        run: python tests/embedded_e2e.py
