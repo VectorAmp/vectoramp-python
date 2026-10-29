@@ -26,7 +26,7 @@ classifiers = [
 dependencies = ["httpx>=0.25,<1"]
 
 [project.optional-dependencies]
-embedded = ["vectoramp-sable-embedded-runtime==0.1.0"]
+embedded = ["vectoramp-sable-embedded-runtime==0.1.2"]
 dev = [
   "pytest>=7.4",
   "pytest-cov>=4.1",
@@ -42,6 +42,16 @@ Repository = "https://github.com/VectorAmp/vectoramp-python"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vectoramp"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/CHANGELOG.md",
+  "/LICENSE",
+  "/NOTICE",
+  "/README.md",
+  "/pyproject.toml",
+  "/src/vectoramp",
+]
 
 [tool.pytest.ini_options]
 addopts = "--cov=vectoramp --cov-report=term-missing --cov-fail-under=90"

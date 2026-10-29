@@ -47,6 +47,8 @@ jobs:
       - run: pytest
       - run: python -m build
       - run: twine check dist/*
+      - name: Verify public release payload
+        run: python .github/scripts/verify_release_payload.py dist/*
       - uses: pypa/gh-action-pypi-publish@release/v1
 
   public-canary:
