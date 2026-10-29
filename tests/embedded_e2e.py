@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import math
 import os
+import tempfile
 import time
 from pathlib import Path
 
 from vectoramp import VectorAmp
 
-root = Path(os.environ["VECTORAMP_EMBEDDED_E2E_ROOT"])
+root = Path(
+    os.environ.get(
+        "VECTORAMP_EMBEDDED_E2E_ROOT",
+        tempfile.mkdtemp(prefix="vectoramp-python-e2e-"),
+    )
+)
 client = VectorAmp.embedded(root)
 dataset = client.datasets.create(
     name="sdk-e2e",
