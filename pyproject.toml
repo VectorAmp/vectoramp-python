@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling>=1.24"]
+requires = ["hatchling==1.27.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "vectoramp"
-version = "0.5.1"
+version = "0.6.0"
 description = "Python SDK for the VectorAmp API"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -20,16 +20,18 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Typing :: Typed",
 ]
 dependencies = ["httpx>=0.25,<1"]
 
 [project.optional-dependencies]
+embedded = ["vectoramp-sable-embedded-runtime==0.1.2"]
 dev = [
   "pytest>=7.4",
   "pytest-cov>=4.1",
   "ruff>=0.5",
-  "mypy>=1.8",
+  "mypy>=1.8,<2",
 ]
 
 [project.urls]
@@ -40,6 +42,16 @@ Repository = "https://github.com/VectorAmp/vectoramp-python"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vectoramp"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/CHANGELOG.md",
+  "/LICENSE",
+  "/NOTICE",
+  "/README.md",
+  "/pyproject.toml",
+  "/src/vectoramp",
+]
 
 [tool.pytest.ini_options]
 addopts = "--cov=vectoramp --cov-report=term-missing --cov-fail-under=90"
@@ -55,4 +67,9 @@ select = ["E", "F", "I", "B", "SIM"]
 [tool.mypy]
 python_version = "3.9"
 warn_unused_configs = true
+follow_imports = "skip"
 packages = ["vectoramp"]
+
+[[tool.mypy.overrides]]
+module = "vectoramp_sable"
+ignore_missing_imports = true

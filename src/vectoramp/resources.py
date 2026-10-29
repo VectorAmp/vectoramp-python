@@ -205,6 +205,14 @@ class Dataset:
         """Delete this dataset and return the API response."""
         return self.service.delete(self.id)
 
+    def optimize(self) -> JSON:
+        """Build or checkpoint the local/hosted SABLE index."""
+        return self.service.optimize(self.id)
+
+    def index_status(self) -> JSON:
+        """Return the SABLE index lifecycle state."""
+        return self.service.index_status(self.id)
+
     def list_documents(
         self,
         *,
@@ -454,9 +462,7 @@ class DatasetsResource:
         if openai_api_key is not None:
             if self.client is None or not hasattr(self.client, "secrets"):
                 raise TypeError("openai_api_key requires a DatasetResource owned by VectorAmp.")
-            validation_model = str(
-                (embedding or {}).get("model") or OPENAI_TEXT_EMBEDDING_3_SMALL
-            )
+            validation_model = str((embedding or {}).get("model") or OPENAI_TEXT_EMBEDDING_3_SMALL)
             self.client.secrets.put(
                 openai_secret_ref,
                 openai_api_key,
@@ -543,7 +549,9 @@ class DatasetsResource:
         """Normalize the legacy field-name mapping and the canonical field array."""
         if isinstance(schema, Mapping):
             return [
-                {"name": name, **dict(config)}
+                {"name": name, "type": config}
+                if isinstance(config, str)
+                else {"name": name, **dict(config)}
                 for name, config in schema.items()
             ]
         return [dict(field) for field in schema]
@@ -566,6 +574,14 @@ class DatasetsResource:
             Stats response JSON.
         """
         return self._transport.request("GET", f"/datasets/{dataset_id}/stats")
+
+    def optimize(self, dataset_id: str) -> JSON:
+        """Build or checkpoint a dataset's SABLE index."""
+        return self._transport.request("POST", f"/datasets/{dataset_id}/optimize")
+
+    def index_status(self, dataset_id: str) -> JSON:
+        """Return a dataset's SABLE index lifecycle state."""
+        return self._transport.request("GET", f"/datasets/{dataset_id}/index-status")
 
     def list_documents(
         self,
@@ -727,9 +743,7 @@ class DatasetsResource:
         body: JSON = {"ids": list(ids)}
         if write_concern is not None:
             body["write_concern"] = dict(write_concern)
-        return self._transport.request(
-            "DELETE", f"/datasets/{dataset_id}/vectors", json_body=body
-        )
+        return self._transport.request("DELETE", f"/datasets/{dataset_id}/vectors", json_body=body)
 
     def embed(
         self,
@@ -898,9 +912,7 @@ class IngestionResource:
             API response, or ``None`` for a ``204`` response.
         """
         params = {"force": "true"} if force else None
-        return self._transport.request(
-            "DELETE", f"/ingestion/sources/{source_id}", params=params
-        )
+        return self._transport.request("DELETE", f"/ingestion/sources/{source_id}", params=params)
 
     def list_unused_sources(self, *, limit: int = 50, offset: int = 0) -> JSON:
         """List sources not referenced by any schedule or job.
@@ -961,13 +973,9 @@ class IngestionResource:
             body = {"source_type": request["source_type"], "config": request["config"]}
         else:
             if source_type is None or config is None:
-                raise TypeError(
-                    "validate_source requires source or both source_type and config."
-                )
+                raise TypeError("validate_source requires source or both source_type and config.")
             body = {"source_type": source_type, "config": dict(config)}
-        return self._transport.request(
-            "POST", "/ingestion/sources/validate", json_body=body
-        )
+        return self._transport.request("POST", "/ingestion/sources/validate", json_body=body)
 
     def create_source(
         self,
@@ -1700,9 +1708,7 @@ class SchedulesResource:
         Returns:
             ``{"job_id": "..."}`` for the newly created ingestion job.
         """
-        return self._transport.request(
-            "POST", f"/ingestion/schedules/{schedule_id}/trigger"
-        )
+        return self._transport.request("POST", f"/ingestion/schedules/{schedule_id}/trigger")
 
 
 class IntelligenceResource:
@@ -1774,7 +1780,6 @@ class IntelligenceResource:
             stream=True,
         )
         yield from self._transport.stream("POST", "/intelligence/query", json_body=body)
-
 
     def create_session(
         self,

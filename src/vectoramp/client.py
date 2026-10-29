@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from types import TracebackType
-from typing import Iterator, Optional, Sequence, Type
+from typing import Iterator, Optional, Sequence, Type, Union
 
 import httpx
 
@@ -64,6 +64,13 @@ class VectorAmp:
         self.org_secrets = self.secrets
         self.schedules = SchedulesResource(self.transport)
         self.intelligence = IntelligenceResource(self.transport)
+
+    @classmethod
+    def embedded(cls, root: Union[str, os.PathLike[str]]) -> "VectorAmp":
+        """Create a client backed by local, in-process SABLE storage."""
+        from .embedded import EmbeddedTransport
+
+        return cls(transport=EmbeddedTransport(root))
 
     def ask(
         self,

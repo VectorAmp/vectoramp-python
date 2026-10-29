@@ -18,7 +18,10 @@ class MetadataSchemaField(TypedDict):
 
 
 MetadataSchema = Sequence[MetadataSchemaField]
-MetadataSchemaInput = Union[MetadataSchema, Mapping[str, Mapping[str, Any]]]
+MetadataSchemaInput = Union[
+    MetadataSchema,
+    Mapping[str, Union[MetadataFieldType, Mapping[str, Any]]],
+]
 
 
 class EmbeddingConfig(TypedDict):
@@ -64,7 +67,6 @@ FilterValue = Union[str, int, float, bool, None]
 Filters = Mapping[str, FilterValue]
 AdvancedFilter = Mapping[str, Any]
 OptionalJSON = Optional[Mapping[str, Any]]
-
 
 
 class SourceChunk(TypedDict, total=False):

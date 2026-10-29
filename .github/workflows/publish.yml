@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - 'v*.*.*'
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,6 +19,27 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
+      - name: Verify release versions and runtime availability
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import tomllib
+          import urllib.request
+
+          with open("pyproject.toml", "rb") as handle:
+              project = tomllib.load(handle)["project"]
+          tag_version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          if project["version"] != tag_version:
+              raise SystemExit(f"tag {tag_version} does not match package {project['version']}")
+          requirement = project["optional-dependencies"]["embedded"][0]
+          runtime_version = requirement.split("==", 1)[1]
+          url = f"https://pypi.org/pypi/vectoramp-sable-embedded-runtime/{runtime_version}/json"
+          with urllib.request.urlopen(url) as response:
+              metadata = json.load(response)
+          if metadata["info"]["version"] != runtime_version:
+              raise SystemExit("embedded runtime version is not publicly readable")
+          PY
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e '.[dev]' build twine
       - run: ruff check .
@@ -27,4 +47,26 @@ jobs:
       - run: pytest
       - run: python -m build
       - run: twine check dist/*
+      - name: Verify public release payload
+        run: python .github/scripts/verify_release_payload.py dist/*
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  public-canary:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the public SDK and embedded runtime
+        run: |
+          for attempt in $(seq 1 24); do
+            if python -m pip install --no-cache-dir --index-url https://pypi.org/simple "vectoramp[embedded]==${GITHUB_REF_NAME#v}"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+      - name: Run embedded public-registry canary
+        run: python tests/embedded_e2e.py
