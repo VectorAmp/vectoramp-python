@@ -1,9 +1,9 @@
 <div align="center">
   <a href="https://vectoramp.com/">
     <picture>
-      <source media="(prefers-color-scheme: light)" srcset="assets/logo-full-light.svg">
-      <source media="(prefers-color-scheme: dark)" srcset="assets/logo-full-dark.svg">
-      <img alt="VectorAmp Logo" src="assets/logo-full-dark.svg" width="50%">
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/VectorAmp/vectoramp-python/main/assets/logo-full-light.svg">
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/VectorAmp/vectoramp-python/main/assets/logo-full-dark.svg">
+      <img alt="VectorAmp Logo" src="https://raw.githubusercontent.com/VectorAmp/vectoramp-python/main/assets/logo-full-dark.svg" width="50%">
     </picture>
   </a>
 </div>
