@@ -482,6 +482,7 @@ def test_insert_vectors_and_add_texts() -> None:
         ["one", "two"],
         ids=["one-id", "two-id"],
         metadatas=[{"a": 1}, {"b": 2}],
+        security_scope_key="tenant-acme",
     )
     assert result == {"inserted": 2}
     assert client.datasets.insert("ds_1", [{"id": "three", "values": [0.5]}]) == {"inserted": 2}
@@ -493,6 +494,7 @@ def test_insert_vectors_and_add_texts() -> None:
         "id": "one-id",
         "values": [0.1, 0.2],
         "metadata": {"a": 1, "text": "one"},
+        "security_scope_key": "tenant-acme",
     }
     assert calls[3] == ("/datasets/ds_1/embed", {"texts": ["single"]})
 
@@ -945,7 +947,9 @@ def test_ingest_files_upload_flow(tmp_path: Path) -> None:
             assert body["name"].startswith("file-upload-sample-")
             return json_response({"id": "source_1"})
         if request.url.path == "/ingestion/sources/source_1/upload/init":
-            assert json.loads(request.content)["files"][0]["name"] == "sample.txt"
+            body = json.loads(request.content)
+            assert body["files"][0]["name"] == "sample.txt"
+            assert body["security_scope_key"] == "tenant-acme"
             return json_response(
                 {
                     "job_id": "job_1",
@@ -964,7 +968,9 @@ def test_ingest_files_upload_flow(tmp_path: Path) -> None:
         raise AssertionError(str(request.url))
 
     client = make_client(handler)
-    result = client.ingestion.ingest_files(dataset_id="ds_1", paths=[sample])
+    result = client.ingestion.ingest_files(
+        dataset_id="ds_1", paths=[sample], security_scope_key="tenant-acme"
+    )
     assert result["status"] == "pending"
     assert uploaded == {"content": b"hello", "content_type": "text/plain"}
 
@@ -1008,6 +1014,7 @@ def test_schedules_crud_and_trigger() -> None:
         dataset_id="ds_1",
         cron="0 0 * * *",
         timezone="UTC",
+        security_scope={"external_key": "tenant-acme"},
     )
     assert created["id"] == "sch_2"
     create_body = json.loads(calls[2][3])
@@ -1016,6 +1023,7 @@ def test_schedules_crud_and_trigger() -> None:
         "dataset_id": "ds_1",
         "cron": "0 0 * * *",
         "timezone": "UTC",
+        "security_scope": {"external_key": "tenant-acme"},
     }
 
     updated = client.schedules.update("sch_2", enabled=False)

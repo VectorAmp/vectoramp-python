@@ -388,6 +388,24 @@ job = dataset.ingest_files(["./docs/whitepaper.pdf", "./docs/overview.txt"])
 
 Pass `source_name="product-docs-upload"` only when you want a specific source name.
 
+## Dataset permissions
+
+Assign writes to an active dataset-local scope by external key. The key is optional; when omitted,
+the API uses the dataset default.
+
+```python
+dataset.insert([{"id": "v1", "values": [0.1, 0.2], "security_scope_key": "tenant-acme"}])
+dataset.add_texts(["private handbook"], security_scope_key="tenant-acme")
+dataset.ingest_files(["handbook.pdf"], security_scope_key="tenant-acme")
+
+client.schedules.create(
+    source_id="src_1", dataset_id=dataset.id, cron="0 0 * * *",
+    security_scope={"external_key": "tenant-acme"},
+)
+```
+
+Search needs no scope argument. The API filters results using the caller's effective permissions.
+
 ## Intelligence / RAG
 
 Non-streaming query:
