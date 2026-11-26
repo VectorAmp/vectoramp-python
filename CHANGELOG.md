@@ -6,6 +6,11 @@ This project follows semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Add optional dataset security-scope support to vector inserts, `add_texts`, file ingestion,
+  upload initialization, and ingestion schedule create/update requests.
+
 ### Changed
 
 - **Breaking:** Intelligence queries now scope with `dataset_ids` (a list) instead of the retired

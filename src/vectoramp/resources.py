@@ -187,6 +187,7 @@ class Dataset:
         *,
         ids: Optional[Sequence[VectorId]] = None,
         metadatas: Optional[Sequence[Mapping[str, Any]]] = None,
+        security_scope_key: Optional[str] = None,
     ) -> JSON:
         """Embed text values with the dataset model and insert them.
 
@@ -199,7 +200,13 @@ class Dataset:
         Returns:
             Insert response JSON.
         """
-        return self.service.add_texts(self.id, texts, ids=ids, metadatas=metadatas)
+        return self.service.add_texts(
+            self.id,
+            texts,
+            ids=ids,
+            metadatas=metadatas,
+            security_scope_key=security_scope_key,
+        )
 
     def delete(self) -> Any:
         """Delete this dataset and return the API response."""
@@ -278,6 +285,7 @@ class Dataset:
         *,
         source_name: Optional[str] = None,
         description: Optional[str] = None,
+        security_scope_key: Optional[str] = None,
     ) -> JSON:
         """Upload local files into this dataset.
 
@@ -302,6 +310,7 @@ class Dataset:
             paths=paths,
             source_name=source_name,
             description=description,
+            security_scope_key=security_scope_key,
         )
 
     def ingest_source(self, source: SourceInput, *, pipeline_id: Optional[str] = None) -> JSON:
@@ -774,6 +783,7 @@ class DatasetsResource:
         *,
         ids: Optional[Sequence[VectorId]] = None,
         metadatas: Optional[Sequence[Mapping[str, Any]]] = None,
+        security_scope_key: Optional[str] = None,
     ) -> JSON:
         """Embed text values with the dataset model and insert them.
 
@@ -810,6 +820,8 @@ class DatasetsResource:
                     "metadata": metadata,
                 }
             )
+            if security_scope_key is not None:
+                vectors[-1]["security_scope_key"] = security_scope_key
         return self.insert_vectors(dataset_id, vectors)
 
     def ensure_engine(self, dataset_id: str) -> JSON:
@@ -1483,7 +1495,13 @@ class IngestionResource:
         """Queue a fresh full-rerun job from an eligible failed or cancelled job."""
         return self._transport.request("POST", f"/ingestion/jobs/{job_id}/retry")
 
-    def init_upload(self, source_id: str, files: Sequence[Mapping[str, Any]]) -> JSON:
+    def init_upload(
+        self,
+        source_id: str,
+        files: Sequence[Mapping[str, Any]],
+        *,
+        security_scope_key: Optional[str] = None,
+    ) -> JSON:
         """Initialize presigned uploads for a file-upload source.
 
         Args:
@@ -1493,8 +1511,11 @@ class IngestionResource:
         Returns:
             Upload session JSON, including upload URLs and job id.
         """
+        body: JSON = {"files": list(files)}
+        if security_scope_key is not None:
+            body["security_scope_key"] = security_scope_key
         return self._transport.request(
-            "POST", f"/ingestion/sources/{source_id}/upload/init", json_body={"files": list(files)}
+            "POST", f"/ingestion/sources/{source_id}/upload/init", json_body=body
         )
 
     def complete_upload(self, source_id: str, *, job_id: str, file_ids: Sequence[str]) -> JSON:
@@ -1521,6 +1542,7 @@ class IngestionResource:
         paths: Sequence[PathLike],
         source_name: Optional[str] = None,
         description: Optional[str] = None,
+        security_scope_key: Optional[str] = None,
     ) -> JSON:
         """Create a file-upload source, upload files, and complete the flow.
 
@@ -1550,7 +1572,9 @@ class IngestionResource:
         )
         source_id = str(source.get("id") or source.get("source_id"))
         files = [self._file_descriptor(path) for path in file_paths]
-        upload = self.init_upload(source_id, files)
+        upload = self.init_upload(
+            source_id, files, security_scope_key=security_scope_key
+        )
         uploads = upload.get("uploads", [])
         if len(uploads) != len(file_paths):
             raise ValueError("Upload init response did not match requested files.")
@@ -1632,6 +1656,7 @@ class SchedulesResource:
         enabled: Optional[bool] = None,
         name: Optional[str] = None,
         metadata: Optional[Mapping[str, Any]] = None,
+        security_scope: Optional[Mapping[str, Any]] = None,
     ) -> JSON:
         """Create a recurring ingestion schedule.
 
@@ -1663,6 +1688,8 @@ class SchedulesResource:
             body["name"] = name
         if metadata is not None:
             body["metadata"] = dict(metadata)
+        if security_scope is not None:
+            body["security_scope"] = dict(security_scope)
         return self._transport.request("POST", "/ingestion/schedules", json_body=body)
 
     def update(
@@ -1675,6 +1702,7 @@ class SchedulesResource:
         enabled: Optional[bool] = None,
         name: Optional[str] = None,
         metadata: Optional[Mapping[str, Any]] = None,
+        security_scope: Optional[Mapping[str, Any]] = None,
     ) -> JSON:
         """Update a schedule. Pass only the fields you want to change.
 
@@ -1694,6 +1722,8 @@ class SchedulesResource:
             body["name"] = name
         if metadata is not None:
             body["metadata"] = dict(metadata)
+        if security_scope is not None:
+            body["security_scope"] = dict(security_scope)
         return self._transport.request(
             "PATCH", f"/ingestion/schedules/{schedule_id}", json_body=body
         )

@@ -38,6 +38,7 @@ class Vector(TypedDict, total=False):
     id: VectorId
     values: Sequence[float]
     metadata: Metadata
+    security_scope_key: str
 
 
 class ConversationTurn(TypedDict):
